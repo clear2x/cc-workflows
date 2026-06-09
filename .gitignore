@@ -1,0 +1,25 @@
+# State files
+/tmp/claude_orchestrator_state.json
+
+# Worktrees (parallel mode)
+/tmp/orchestrator-worktrees/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+.env
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
