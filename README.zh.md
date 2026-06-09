@@ -1,11 +1,3 @@
----
-name: claude-orchestrator
-description: >
-  多 Agent 动态工作流调度器。基于 claude -p 实现：单 agent 执行、多 agent 流水线、
-  条件分支、并行派发、长任务自动循环（最多 100 段）。
-version: 2.0.0
----
-
 <div align="center">
 
 [English](../README.md) | [中文](./README.zh.md)
@@ -14,13 +6,15 @@ version: 2.0.0
 
 ---
 
-# Claude Orchestrator
-
 <div align="center">
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-v2.1.168%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
+
+</div>
+
+<div align="center">
 
 **一个专业级多 Agent 工作流调度器，专为 Claude Code 设计。**
 
@@ -34,6 +28,13 @@ version: 2.0.0
 - [快速开始](#快速开始)
 - [安装](#安装)
 - [6 种执行模式](#6-种执行模式)
+  - [模式 1 — `agents`](#模式-1--agents)
+  - [模式 2 — `run`](#模式-2--run)
+  - [模式 3 — `pipeline`](#模式-3--pipeline)
+  - [模式 4 — `branch`](#模式-4--branch)
+  - [模式 5 — `parallel`](#模式-5--parallel)
+  - [模式 6 — `loop`](#模式-6--loop)
+  - [`sessions`](#sessions)
 - [CLI 参考](#cli-参考)
 - [高级功能](#高级功能)
 - [Superpowers 集成](#superpowers-集成)
@@ -48,23 +49,21 @@ version: 2.0.0
 
 Claude Orchestrator 是一个**生产级**的 Python 封装，底层调用 `claude -p`（Claude Code 的非交互无头模式）。它将一次性 prompt 转化为**可重复执行、断点续接、可观测**的工作流，全程在终端完成。
 
-<div align="center">
+### 执行模式一览
 
-```
-单 agent 执行  →  run
-顺序流水线    →  pipeline
-条件分支      →  branch
-并行派发      →  parallel（带 git worktree 隔离）
-长任务循环    →  loop（断点续接，最多 100 段）
-查看会话      →  sessions
-```
-
-</div>
+| 模式 | 说明 |
+|------|------|
+| `run` | 单 agent 执行，自动续接 |
+| `pipeline` | 顺序多 agent 流水线 |
+| `branch` | 条件分支流水线 |
+| `parallel` | 并行派发，带 git worktree 隔离 |
+| `loop` | 长任务分段循环，支持断点续接 |
+| `sessions` | 查看活跃 Claude 会话 |
 
 ### 快速开始
 
 ```bash
-# 1. 安装
+# 1. 安装（一条命令）
 npx skills add https://github.com/clear2x/claude-orchestrator
 
 # 2. 验证可用 agent
@@ -84,9 +83,9 @@ python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
   --max-steps 100
 ```
 
-### 安装
+## 安装
 
-#### 方式 A：`npx skills add`（推荐，一条命令）
+### 方式 A：`npx skills add`（推荐，一条命令）
 
 ```bash
 npx skills add https://github.com/clear2x/claude-orchestrator
@@ -100,7 +99,7 @@ npx skills add https://github.com/clear2x/claude-orchestrator
 npx skills add https://github.com/clear2x/claude-orchestrator --skill "claude-orchestrator"
 ```
 
-#### 方式 B：`install.py`
+### 方式 B：`install.py`
 
 ```bash
 git clone https://github.com/clear2x/claude-orchestrator.git
@@ -112,7 +111,7 @@ python3 install.py
 - `~/.hermes/skills/claude-orchestrator/claude_orchestrator.py` — Hermes Agent 用
 - `~/.claude/skills/claude-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
 
-#### 方式 C：手动复制
+### 方式 C：手动复制
 
 ```bash
 # Claude Code 项目级
@@ -127,9 +126,9 @@ mkdir -p ~/.hermes/skills/claude-orchestrator
 cp skills/claude-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
 ```
 
-### 6 种执行模式
+## 6 种执行模式
 
-#### 模式 1 — `agents`：查看可用 agent
+### 模式 1 — `agents`：查看可用 agent
 
 不调用模型，30 秒内从 system init 事件读取所有可用 agent。
 
@@ -146,7 +145,7 @@ python3 claude_orchestrator.py agents
   ...
 ```
 
-#### 模式 2 — `run`：单 agent 执行
+### 模式 2 — `run`：单 agent 执行
 
 执行单个 prompt，支持指定 agent 和 model。再次执行时自动续接上次会话。
 
@@ -163,7 +162,7 @@ python3 claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-
 <输出内容>
 ```
 
-#### 模式 3 — `pipeline`：多 agent 流水线（顺序执行）
+### 模式 3 — `pipeline`：多 agent 流水线（顺序执行）
 
 每一步可使用不同 agent，session 自动续接。
 
@@ -174,7 +173,7 @@ python3 claude_orchestrator.py pipeline \
   --step "Plan: 给出重构方案" --agent Plan
 ```
 
-#### 模式 4 — `branch`：条件分支
+### 模式 4 — `branch`：条件分支
 
 在指定步骤评估条件，根据结果跳转到 `--then-step` 或 `--else-step`。
 
@@ -194,7 +193,7 @@ python3 claude_orchestrator.py branch \
 | 数值比较 | `bugs_found > 0`, `count >= 5`, `severity == 3` |
 | 字符串包含 | `output contains 'PASS'`, `result contains 'error'` |
 
-#### 模式 5 — `parallel`：并行派发
+### 模式 5 — `parallel`：并行派发
 
 最多 8 个任务同时执行，每个任务拥有独立的 session 和 **git worktree 隔离**。
 
@@ -228,7 +227,7 @@ Worktree 行为控制：
 | `--keep-worktree` | 跳过合并和清理，worktree 保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>` |
 | `--no-worktree` | 关闭隔离，所有任务直接在共享项目目录执行 |
 
-#### 模式 6 — `loop`：长任务自动循环
+### 模式 6 — `loop`：长任务自动循环
 
 将 prompt 按换行拆成独立步骤，每步执行一次，自动续接。中断后重新运行会从上次停止的步骤继续。
 
@@ -256,13 +255,13 @@ python3 claude_orchestrator.py loop "..." --max-steps 2
 
 状态保存在 `/tmp/claude_orchestrator_state.json`，进程重启不丢失。
 
-#### `sessions`：查看会话状态
+### `sessions`：查看会话状态
 
 ```bash
 python3 claude_orchestrator.py sessions
 ```
 
-### CLI 参考
+## CLI 参考
 
 ```
 python3 claude_orchestrator.py <命令> [选项]
@@ -283,17 +282,17 @@ python3 claude_orchestrator.py <命令> [选项]
   --output-format json                     结构化事件流输出
 ```
 
-### 高级功能
+## 高级功能
 
-#### 自动检测项目根目录
+### 自动检测项目根目录
 
 启动时执行 `git rev-parse --show-toplevel`，若当前目录在 git 仓库内则使用该仓库根目录，否则回退到 `Path.cwd()`。无需硬编码路径。
 
-#### 状态持久化
+### 状态持久化
 
 所有多步模式在每步执行后写入 `/tmp/claude_orchestrator_state.json`。即使进程被 kill（Ctrl-C、超时、崩溃），重新执行相同命令即可从上次完成的步骤继续，**零数据丢失**。
 
-#### Superpowers 工作流自动注入
+### Superpowers 工作流自动注入
 
 `loop` 模式会检测每步 prompt 中的关键词，自动在任务文本前注入对应的 [Superpowers](https://github.com/obra/superpowers) 约束。
 
@@ -314,7 +313,7 @@ python3 claude_orchestrator.py <命令> [选项]
 
 会自动注入 Red-Green-Refactor 约束，无需手动编写复杂 prompt。
 
-#### `--interactive` 预检（仅 loop 模式）
+### `--interactive` 预检（仅 loop 模式）
 
 加 `--interactive` 在循环开始前触发一次 **Superpowers brainstorming 风格**的需求澄清：
 
@@ -341,7 +340,7 @@ python3 claude_orchestrator.py <命令> [选项]
 
 > **注意：** `--interactive` 需要真实 TTY。在非交互子进程（Claude Code 子 agent、CI 管道）中会报 `EOFError`。需求澄清应在 Claude Code 对话中完成，确认后再执行脚本。
 
-#### 输出解析
+### 输出解析
 
 Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常为空字符串，实际文本内容在 preceding `assistant` 事件的 `message.content[].text` 块中。编排器的 `_parse_claude_output` 函数会按以下顺序提取：
 
@@ -365,7 +364,7 @@ model = last_result.get("model") or list(last_result.get("modelUsage", {}).keys(
 
 详见 [`references/output-parsing.md`](references/output-parsing.md)。
 
-### Superpowers 集成
+## Superpowers 集成
 
 [Superpowers](https://github.com/obra/superpowers)（ obra 出品）是一套编码代理的最佳实践 skill 集，包含 TDD、subagent-driven-development、writing-plans、requesting-code-review、systematic-debugging、brainstorming 等。
 
@@ -393,7 +392,7 @@ python3 claude_orchestrator.py loop \
 /plugin install superpowers@superpowers-marketplace
 ```
 
-### 故障排查
+## 故障排查
 
 | 现象 | 解决方法 |
 |------|---------|
@@ -402,8 +401,6 @@ python3 claude_orchestrator.py loop \
 | `result.result` 为空 | 正常现象 — 解析器会自动回退到 `assistant` 事件的 text 块 |
 | Worktree 合并冲突 | Worktree 保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>`，手动解决后在项目根执行 `git merge --no-edit orchestrator-<name>` |
 | 状态文件过大 | 执行 `python3 claude_orchestrator.py loop "dummy" --max-steps 0` 可重置状态（完成 pending loop 并清空） |
-
----
 
 ## 开源协议
 
