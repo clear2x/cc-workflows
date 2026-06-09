@@ -1,10 +1,4 @@
-<div align="center">
-
-[English](../README.md) | [中文](./README.zh.md)
-
-</div>
-
----
+# Claude Orchestrator
 
 <div align="center">
 
@@ -12,13 +6,11 @@
 ![Claude Code](https://img.shields.io/badge/Claude_Code-v2.1.168%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-</div>
-
-<div align="center">
-
 **一个专业级多 Agent 工作流调度器，专为 Claude Code 设计。**
 
 </div>
+
+[English](../README.md) | [中文](./README.zh.md)
 
 ---
 
