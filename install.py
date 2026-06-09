@@ -5,14 +5,15 @@ import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).parent.resolve()
-SCRIPT = REPO_DIR / "claude_orchestrator.py"
+SKILL_DIR = REPO_DIR / "skills" / "claude-orchestrator"
+SCRIPT = SKILL_DIR / "claude_orchestrator.py"
+SKILL_MD = SKILL_DIR / "SKILL.md"
 TARGET_HERMES = Path.home() / ".hermes" / "skills" / "claude-orchestrator" / "claude_orchestrator.py"
 TARGET_CC = Path.home() / ".claude" / "skills" / "claude-orchestrator" / "claude_orchestrator.py"
-SKILL_MD = REPO_DIR / "SKILL.md"
 
 def install():
     if not SCRIPT.exists():
-        print("ERROR: claude_orchestrator.py not found next to this script.")
+        print(f"ERROR: {SCRIPT} not found.")
         sys.exit(1)
 
     TARGET_HERMES.parent.mkdir(parents=True, exist_ok=True)

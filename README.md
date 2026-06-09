@@ -97,10 +97,24 @@ Step 4: write a refactor plan" \
 
 ### Installation
 
-#### Option A: `install.py` (recommended)
+#### Option A: `npx skills add` (recommended, one-line)
 
 ```bash
-git clone https://github.com/<your-org>/claude-orchestrator.git
+npx skills add https://github.com/clear2x/claude-orchestrator
+```
+
+This copies the `skills/claude-orchestrator/` folder into your local skills directory automatically.
+
+Install a single skill by install name:
+
+```bash
+npx skills add https://github.com/clear2x/claude-orchestrator --skill "claude-orchestrator"
+```
+
+#### Option B: `install.py`
+
+```bash
+git clone https://github.com/clear2x/claude-orchestrator.git
 cd claude-orchestrator
 python3 install.py
 ```
@@ -109,22 +123,19 @@ Copies the script to:
 - `~/.hermes/skills/claude-orchestrator/claude_orchestrator.py` — Hermes Agent
 - `~/.claude/skills/claude-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code
 
-#### Option B: Claude Code plugin
+#### Option C: Manual copy
 
 ```bash
-# In your project root
+# Claude Code project-level
 mkdir -p .claude/skills/claude-orchestrator
-cp claude_orchestrator.py .claude/skills/claude-orchestrator/
-cp SKILL.md .claude/skills/claude-orchestrator/
+cp skills/claude-orchestrator/claude_orchestrator.py .claude/skills/claude-orchestrator/
+cp skills/claude-orchestrator/SKILL.md .claude/skills/claude-orchestrator/
 ```
 
-Claude Code will auto-discover skills that contain a `SKILL.md` file.
-
-#### Option C: Global Hermes Agent skill
-
 ```bash
+# Hermes Agent global
 mkdir -p ~/.hermes/skills/claude-orchestrator
-cp claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
+cp skills/claude-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
 ```
 
 ### 6 Execution Modes
@@ -457,10 +468,24 @@ python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
 
 ### 安装
 
-#### 方式 A：`install.py`（推荐）
+#### 方式 A：`npx skills add`（推荐，一条命令）
 
 ```bash
-git clone https://github.com/<your-org>/claude-orchestrator.git
+npx skills add https://github.com/clear2x/claude-orchestrator
+```
+
+会自动将 `skills/claude-orchestrator/` 文件夹复制到本地技能目录。
+
+安装单个 skill（按 install name）：
+
+```bash
+npx skills add https://github.com/clear2x/claude-orchestrator --skill "claude-orchestrator"
+```
+
+#### 方式 B：`install.py`
+
+```bash
+git clone https://github.com/clear2x/claude-orchestrator.git
 cd claude-orchestrator
 python3 install.py
 ```
@@ -469,21 +494,19 @@ python3 install.py
 - `~/.hermes/skills/claude-orchestrator/claude_orchestrator.py` — Hermes Agent 用
 - `~/.claude/skills/claude-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
 
-#### 方式 B：项目级 Claude Code skill
+#### 方式 C：手动复制
 
 ```bash
+# Claude Code 项目级
 mkdir -p .claude/skills/claude-orchestrator
-cp claude_orchestrator.py .claude/skills/claude-orchestrator/
-cp SKILL.md .claude/skills/claude-orchestrator/
+cp skills/claude-orchestrator/claude_orchestrator.py .claude/skills/claude-orchestrator/
+cp skills/claude-orchestrator/SKILL.md .claude/skills/claude-orchestrator/
 ```
 
-Claude Code 会自动发现包含 `SKILL.md` 的技能目录。
-
-#### 方式 C：Hermes Agent 全局 skill
-
 ```bash
+# Hermes Agent 全局
 mkdir -p ~/.hermes/skills/claude-orchestrator
-cp claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
+cp skills/claude-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
 ```
 
 ### 6 种执行模式
