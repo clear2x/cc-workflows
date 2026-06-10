@@ -18,21 +18,25 @@
 
 - [Overview](#overview)
 - [Quick Start](#quick-start)
+- [Best Practices: Using in Claude Code](#best-practices-using-in-claude-code)
+  - [Talk Naturally](#talk-naturally)
+  - [Slash Commands](#slash-commands)
+  - [Mode Selection Guide](#mode-selection-guide)
 - [Installation](#installation)
 - [12 Execution Modes](#12-execution-modes)
-  - [Primitive 1 — `agents`](#primitive-1--agents)
-  - [Primitive 2 — `run`](#primitive-2--run)
-  - [Primitive 3 — `pipeline`](#primitive-3--pipeline)
-  - [Primitive 4 — `branch`](#primitive-4--branch)
-  - [Primitive 5 — `parallel`](#primitive-5--parallel)
-  - [Primitive 6 — `loop`](#primitive-6--loop)
+  - [`agents`](#agents)
+  - [`run`](#run)
+  - [`pipeline`](#pipeline)
+  - [`branch`](#branch)
+  - [`parallel`](#parallel)
+  - [`loop`](#loop)
   - [`sessions`](#sessions)
-  - [Pattern 1 — `classify`](#pattern-1--classify)
-  - [Pattern 2 — `fanout`](#pattern-2--fanout)
-  - [Pattern 3 — `verify`](#pattern-3--verify)
-  - [Pattern 4 — `genfilter`](#pattern-4--genfilter)
-  - [Pattern 5 — `tournament`](#pattern-5--tournament)
-  - [Pattern 6 — `loop_until`](#pattern-6--loop_until)
+  - [`classify`](#classify)
+  - [`fanout`](#fanout)
+  - [`verify`](#verify)
+  - [`genfilter`](#genfilter)
+  - [`tournament`](#tournament)
+  - [`loop_until`](#loop_until)
 - [CLI Reference](#cli-reference)
 - [Advanced Features](#advanced-features)
 - [Superpowers Integration](#superpowers-integration)
@@ -90,22 +94,58 @@ Step 4: write a refactor plan" \
   --max-steps 100
 ```
 
-### How This Compares to Official Dynamic Workflows
+## Best Practices: Using in Claude Code
 
-Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) let Claude **write and orchestrate its own JavaScript harness** on the fly. That system exposes 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JS code inside a workflow file.
+### Talk Naturally
 
-CC Workflows takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
+You do not need to memorize mode names or command syntax. Just describe what you want in plain language inside Claude Code, and Claude will automatically pick the right mode for you. Here are some examples:
 
-| Official pattern | Closest Orchestrator mode | Notes |
-|------------------|---------------------------|-------|
-| Classify-and-act | `branch` | Route to different steps based on a condition |
-| Fan-out-and-synthesize | `parallel` | Spawn concurrent agents; manual synthesis in a follow-up step |
-| Adversarial verification | `pipeline` + `parallel` | Chain a verifier agent after each worker in a pipeline |
-| Generate-and-filter | `pipeline` | Generate step then filter/review step |
-| Tournament | `parallel` | Spawn N agents on the same task, then judge results |
-| Loop until done | `loop` | Segmented loop with stop condition (max-steps acts as budget) |
+| What you say | Mode Claude picks |
+|---|---|
+| "帮我并行分析这3个文件" (Analyze these 3 files in parallel) | `parallel` |
+| "先扫描有没有问题，有的话修复" (Scan for issues first, fix if found) | `branch` |
+| "让3个方案竞争选出最好的" (Let 3 approaches compete, pick the best) | `tournament` |
+| "循环执行直到测试通过" (Keep looping until tests pass) | `loop_until` |
+| "生成几个方案然后筛选最好的" (Generate several options then filter for the best) | `genfilter` |
+| "先分类这个任务，再交给对应的 agent" (Classify this task, then route to the right agent) | `classify` |
 
-In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; CC Workflows is **user-invoked, CLI-driven, and convention-based**. Use CC Workflows when you want predictable, reusable, shareable commands without writing workflow JS.
+### Slash Commands
+
+CC Workflows registers 13 slash commands you can invoke directly in Claude Code:
+
+| Command | Description |
+|---------|-------------|
+| `/cc-workflows` | Overview of all modes |
+| `/cc-agents` | List available agents |
+| `/cc-run` | Single task execution |
+| `/cc-pipeline` | Sequential pipeline |
+| `/cc-branch` | Conditional branch |
+| `/cc-parallel` | Parallel execution |
+| `/cc-loop` | Long task loop |
+| `/cc-classify` | Classify and route |
+| `/cc-fanout` | Fan-out and synthesize |
+| `/cc-verify` | Adversarial verification |
+| `/cc-genfilter` | Generate and filter |
+| `/cc-tournament` | Tournament |
+| `/cc-loop-until` | Loop until condition met |
+
+### Mode Selection Guide
+
+Not sure which mode to use? Pick based on your task:
+
+| Task | Recommended Mode |
+|------|-----------------|
+| Single task | `run` |
+| Multi-step sequential | `pipeline` |
+| Conditional execution | `branch` |
+| Multiple tasks at once | `parallel` |
+| Long task, many steps | `loop` |
+| Route by task type | `classify` |
+| Parallel + synthesize | `fanout` |
+| Generate + quality check | `verify` |
+| Generate many, pick best | `genfilter` |
+| Competitive approaches | `tournament` |
+| Repeat until goal met | `loop_until` |
 
 ## Installation
 
@@ -119,15 +159,6 @@ npx skills add https://github.com/clear2x/cc-workflows
 ```
 
 This copies all mode skills (`cc-run`, `cc-pipeline`, `cc-loop`, etc.) into your local skills directory.
-
-Install a single skill by install name:
-
-```bash
-npx skills add https://github.com/clear2x/cc-workflows
-
-# Or install a single mode:
-# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run --skill "cc-workflows"
-```
 
 ### Option B: `install.py`
 
@@ -158,7 +189,7 @@ cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 
 ## 12 Execution Modes
 
-### Primitive 1 — `agents`
+### `agents`
 
 List all available Claude Code agents without invoking a model.
 
@@ -172,10 +203,10 @@ python3 cc_workflows.py agents
   • Plan
   • general-purpose
   • claude
-  ...
+...
 ```
 
-### Primitive 2 — `run`
+### `run`
 
 Execute a single prompt with an optional agent, auto-resuming from the last session on re-run.
 
@@ -192,7 +223,7 @@ Output includes per-run metadata:
 <output>
 ```
 
-### Primitive 3 — `pipeline`
+### `pipeline`
 
 Run multiple steps **sequentially**, each step can use a different agent. Session is carried forward automatically.
 
@@ -203,7 +234,7 @@ python3 cc_workflows.py pipeline \
   --step "Plan: produce a refactor plan" --agent Plan
 ```
 
-### Primitive 4 — `branch`
+### `branch`
 
 Sequential pipeline with **conditional branching**. After a designated evaluation step, the orchestrator jumps to either the `--then-step` or the `--else-step`.
 
@@ -223,7 +254,7 @@ Supported condition syntax:
 | Numeric comparison | `bugs_found > 0`, `count >= 5`, `severity == 3` |
 | String contains | `output contains 'PASS'`, `result contains 'error'` |
 
-### Primitive 5 — `parallel`
+### `parallel`
 
 Run multiple tasks **concurrently** (up to 8 workers). Each task gets its own session and an isolated **git worktree** under `/tmp/orchestrator-worktrees/orchestrator-<name>`. By default the script **auto-merges** each branch back and cleans the worktree when the task finishes.
 
@@ -262,7 +293,7 @@ Worktree flags:
 | `--keep-worktree` | Skip merge & cleanup; worktree kept at `/tmp/orchestrator-worktrees/orchestrator-<name>` |
 | `--no-worktree` | Disable isolation; all tasks run directly in the shared project directory |
 
-### Primitive 6 — `loop`
+### `loop`
 
 Split a multi-line prompt into independent steps. Execute them one by one, saving state after each step so you can **interrupt and resume**.
 
@@ -298,11 +329,9 @@ Inspect active background Claude sessions and the orchestrator's own tracked sta
 python3 cc_workflows.py sessions
 ```
 
-## 6 Official Workflow Patterns
+## Workflow Patterns
 
-Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) expose 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JavaScript. CC Workflows implements each of these as a native CLI command — no JS workflow files required.
-
-### Pattern 1 — `classify`
+### `classify`
 
 **Classify-and-act**: Use a classifier agent to decide the task type, then route to different agents/behaviors.
 
@@ -320,7 +349,7 @@ How it works:
 3. Executes the matching action prompt with `general-purpose`
 4. If no match, falls back to `--default`
 
-### Pattern 2 — `fanout`
+### `fanout`
 
 **Fan-out-and-synthesize**: Split a task into many smaller steps, run an agent on each, then synthesize results.
 
@@ -339,7 +368,7 @@ How it works:
 3. If `--synthesize` is provided, a final agent merges all results into one report
 4. Worktrees are auto-merged and cleaned up by default (`--keep-worktree` to preserve)
 
-### Pattern 3 — `verify`
+### `verify`
 
 **Adversarial verification**: Run a task, then spawn a separate verifier agent to adversarially check the output against a rubric. Repeat until PASS or max rounds reached.
 
@@ -361,7 +390,7 @@ How it works:
 4. Repeats up to `--max-rounds` times
 5. Outputs the final (hopefully verified) result
 
-### Pattern 4 — `genfilter`
+### `genfilter`
 
 **Generate-and-filter**: Generate N ideas/solutions, then filter them by a rubric, returning only the highest quality candidates.
 
@@ -379,7 +408,7 @@ How it works:
 3. Judge scores and ranks each solution
 4. Top `--filter-top` results are returned with full details
 
-### Pattern 5 — `tournament`
+### `tournament`
 
 **Tournament**: Have N agents compete on the same task using different approaches, then a judge agent picks the winner.
 
@@ -396,7 +425,7 @@ How it works:
 3. A judge agent (`Explore`) evaluates all submissions pairwise against the task + judge prompt
 4. Winner is announced with scoring breakdown
 
-### Pattern 6 — `loop_until`
+### `loop_until`
 
 **Loop until done**: For tasks with an unknown amount of work, loop spawning agents until a stop condition is met (instead of a fixed number of passes).
 
@@ -478,7 +507,7 @@ Refactor auth.py using TDD: write failing tests first, then implement, then refa
 
 Pass `--interactive` to trigger a **Superpowers brainstorming-style** pre-flight before any steps run:
 
-1. Generates 2–3 short clarifying questions via `claude -p`
+1. Generates 2-3 short clarifying questions via `claude -p`
 2. Prompts for answers (or `skip`)
 3. Produces a refined, actionable prompt
 4. Enters the normal segmented loop with the refined prompt

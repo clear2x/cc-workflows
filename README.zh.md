@@ -18,22 +18,26 @@
 
 - [概述](#概述)
 - [快速开始](#快速开始)
+- [在 Claude Code 中使用](#在-claude-code-中使用)
+  - [自然语言触发](#自然语言触发)
+  - [斜杠命令](#斜杠命令)
+  - [模式选择指南](#模式选择指南)
 - [安装](#安装)
-- [6 个 CLI 原语](#6-个-cli-原语)
-  - [模式 1 — `agents`](#模式-1--agents)
-  - [模式 2 — `run`](#模式-2--run)
-  - [模式 3 — `pipeline`](#模式-3--pipeline)
-  - [模式 4 — `branch`](#模式-4--branch)
-  - [模式 5 — `parallel`](#模式-5--parallel)
-  - [模式 6 — `loop`](#模式-6--loop)
+- [CLI 原语](#cli-原语)
+  - [`agents`](#agents)
+  - [`run`](#run)
+  - [`pipeline`](#pipeline)
+  - [`branch`](#branch)
+  - [`parallel`](#parallel)
+  - [`loop`](#loop)
   - [`sessions`](#sessions)
-- [6 种官方 Workflow 模式](#6-种官方-workflow-模式)
-  - [模式 1 — `classify`](#模式-1--classify)
-  - [模式 2 — `fanout`](#模式-2--fanout)
-  - [模式 3 — `verify`](#模式-3--verify)
-  - [模式 4 — `genfilter`](#模式-4--genfilter)
-  - [模式 5 — `tournament`](#模式-5--tournament)
-  - [模式 6 — `loop_until`](#模式-6--loop_until)
+- [Workflow Pattern 模式](#workflow-pattern-模式)
+  - [`classify`](#classify)
+  - [`fanout`](#fanout)
+  - [`verify`](#verify)
+  - [`genfilter`](#genfilter)
+  - [`tournament`](#tournament)
+  - [`loop_until`](#loop_until)
 - [CLI 参考](#cli-参考)
 - [高级功能](#高级功能)
 - [Superpowers 集成](#superpowers-集成)
@@ -91,35 +95,64 @@ python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop \
   --max-steps 100
 ```
 
-### 与官方 Dynamic Workflows 的差异
+## 在 Claude Code 中使用
 
-Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 允许 Claude **现场编写并编排自己的 JavaScript harness**。该体系暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done），Claude 将它们作为 JS 代码组合在 workflow 文件里。
+CC Workflows 以技能（skill）形式集成到 Claude Code 中。你可以通过**自然语言描述**或**斜杠命令**两种方式触发不同的工作流模式。
 
-CC Workflows 走的是另一条路线：它提供 6 个 CLI **执行原语** 和 6 个原生实现的 **官方 workflow pattern** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
+### 自然语言触发
 
-| 官方设计模式 | Orchestrator 对应命令 | 说明 |
-|--------------|----------------------|------|
-| Classify-and-act | `classify` | 分类后路由到不同 agent |
-| Fan-out-and-synthesize | `fanout` | 并发子任务 + 自动汇总 |
-| Adversarial verification | `verify` | 执行后对抗式验证 + 自动修复 |
-| Generate-and-filter | `genfilter` | 生成 N 方案，rubric 筛选 Top K |
-| Tournament | `tournament` | N 个 agent 竞争，judge 评比 |
-| Loop until done | `loop_until` | 满足停止条件前持续循环 |
+在 Claude Code 对话中，直接描述你想要的工作方式，Claude 会自动选择合适的模式执行。无需记忆命令语法——说出你的意图就够了。
 
-| 官方原语 |  Orchestrator 模式 | 说明 |
-|----------|-------------------|------|
-| 单 agent | `run` | 单次执行，支持自动续接 |
-| 流水线 | `pipeline` | 顺序多 agent 流水线 |
-| 条件分支 | `branch` | 根据条件选择不同步骤 |
-| 并行派发 | `parallel` | 并发执行，带 git worktree 隔离 |
-| 长任务循环 | `loop` | 分段循环，支持断点续接 |
-| 会话查看 | `sessions` | 查看活跃 Claude 会话 |
+| 你说的话 | 触发的模式 |
+|---------|-----------|
+| "帮我并行分析这 3 个文件" | `parallel` |
+| "先扫描有没有问题，有的话修复" | `branch` |
+| "让 3 个方案竞争选出最好的" | `tournament` |
+| "循环执行直到测试通过" | `loop_until` |
+| "生成几个方案然后筛选最好的" | `genfilter` |
+| "帮我跑一个 50 步的长任务" | `loop` |
 
-总结：官方 dynamic workflows 是 **Claude 自己写 JS、更灵活**；CC Workflows 是 **用户通过 CLI 调用、更可预期、可复用、可分享**。如果你想要不写 JS 就能获得稳定、可复用的编排命令，用 CC Workflows。
+### 斜杠命令
+
+所有 13 个斜杠命令均可在 Claude Code 对话中直接使用：
+
+| 命令 | 说明 |
+|------|------|
+| `/cc-workflows` | 查看所有模式 |
+| `/cc-agents` | 查看可用 agent |
+| `/cc-run` | 单任务执行 |
+| `/cc-pipeline` | 顺序流水线 |
+| `/cc-branch` | 条件分支 |
+| `/cc-parallel` | 并行执行 |
+| `/cc-loop` | 长任务循环 |
+| `/cc-classify` | 分类路由 |
+| `/cc-fanout` | 扇出聚合 |
+| `/cc-verify` | 对抗验证 |
+| `/cc-genfilter` | 生成过滤 |
+| `/cc-tournament` | 锦标赛 |
+| `/cc-loop-until` | 条件循环 |
+
+### 模式选择指南
+
+根据任务场景快速选择最合适的模式：
+
+| 任务场景 | 推荐模式 |
+|----------|---------|
+| 单个任务 | `run` |
+| 多步顺序执行 | `pipeline` |
+| 根据条件选择执行 | `branch` |
+| 多个任务同时执行 | `parallel` |
+| 长任务分多步 | `loop` |
+| 按类型分派 | `classify` |
+| 并行+汇总 | `fanout` |
+| 执行+质量检查 | `verify` |
+| 生成多个方案选最优 | `genfilter` |
+| 多方案竞争 | `tournament` |
+| 循环直到达成目标 | `loop_until` |
 
 ## 安装
 
-### 方式 A：`npx skills add`（推荐，一条命令）
+### 方式 A：`npx skills add`（推荐）
 
 ```bash
 npx skills add https://github.com/clear2x/cc-workflows
@@ -129,15 +162,6 @@ npx skills add https://github.com/clear2x/cc-workflows
 ```
 
 会自动将所有模式技能（cc-run, cc-pipeline, cc-loop 等）复制到本地技能目录。
-
-安装单个 skill（按 install name）：
-
-```bash
-npx skills add https://github.com/clear2x/cc-workflows
-
-# 或安装单个模式技能：
-# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run --skill "cc-workflows"
-```
 
 ### 方式 B：`install.py`
 
@@ -168,7 +192,7 @@ cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 
 ## 12 种执行模式
 
-### 原语 1 — `agents`：查看可用 agent
+### `agents`：查看可用 agent
 
 不调用模型，30 秒内从 system init 事件读取所有可用 agent。
 
@@ -182,10 +206,10 @@ python3 cc_workflows.py agents
   • Plan
   • general-purpose
   • claude
-  ...
+...
 ```
 
-### 原语 2 — `run`：单 agent 执行
+### `run`：单 agent 执行
 
 执行单个 prompt，支持指定 agent 和 model。再次执行时自动续接上次会话。
 
@@ -202,7 +226,7 @@ python3 cc_workflows.py run "任务描述" --agent Plan --model step-3.7-flash
 <输出内容>
 ```
 
-### 原语 3 — `pipeline`：多 agent 流水线（顺序执行）
+### `pipeline`：多 agent 流水线（顺序执行）
 
 每一步可使用不同 agent，session 自动续接。
 
@@ -213,7 +237,7 @@ python3 cc_workflows.py pipeline \
   --step "Plan: 给出重构方案" --agent Plan
 ```
 
-### 原语 4 — `branch`：条件分支
+### `branch`：条件分支
 
 在指定步骤评估条件，根据结果跳转到 `--then-step` 或 `--else-step`。
 
@@ -233,7 +257,7 @@ python3 cc_workflows.py branch \
 | 数值比较 | `bugs_found > 0`, `count >= 5`, `severity == 3` |
 | 字符串包含 | `output contains 'PASS'`, `result contains 'error'` |
 
-### 原语 5 — `parallel`：并行派发
+### `parallel`：并行派发
 
 最多 8 个任务同时执行，每个任务拥有独立的 session 和 **git worktree 隔离**。
 
@@ -267,7 +291,7 @@ Worktree 行为控制：
 | `--keep-worktree` | 跳过合并和清理，worktree 保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>` |
 | `--no-worktree` | 关闭隔离，所有任务直接在共享项目目录执行 |
 
-### 原语 6 — `loop`：长任务自动循环
+### `loop`：长任务自动循环
 
 将 prompt 按换行拆成独立步骤，每步执行一次，自动续接。中断后重新运行会从上次停止的步骤继续。
 
@@ -301,11 +325,11 @@ python3 cc_workflows.py loop "..." --max-steps 2
 python3 cc_workflows.py sessions
 ```
 
-## 6 种官方 Workflow 模式
+## Workflow Pattern 模式
 
-Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done）。这些模式原本需要 Claude 现场编写 JavaScript 来组合；CC Workflows 将它们直接实现为原生 CLI 命令，无需编写任何 JS 工作流文件。
+6 种高级工作流模式，每种模式解决一类特定的编排问题，全部实现为原生 CLI 命令，直接调用即可。
 
-### 原语 1 — `classify`（Classify-and-act）
+### `classify`（Classify-and-act）
 
 先用一个 classifier agent 对任务进行分类，再根据分类结果路由到不同的 agent/行为。
 
@@ -323,7 +347,7 @@ python3 cc_workflows.py classify \
 3. 执行匹配到的 action prompt（使用 `general-purpose`）
 4. 无匹配时回退到 `--default`
 
-### 原语 2 — `fanout`（Fan-out-and-synthesize）
+### `fanout`（Fan-out-and-synthesize）
 
 将任务拆分为多个小步骤，每个步骤由独立的 agent 并发执行，最后汇总所有结果。
 
@@ -342,7 +366,7 @@ python3 cc_workflows.py fanout \
 3. 如果提供 `--synthesize`，最终 agent 会将所有结果合并为一份报告
 4. 默认自动合并并清理 worktree（`--keep-worktree` 可保留）
 
-### 原语 3 — `verify`（Adversarial verification）
+### `verify`（Adversarial verification）
 
 执行任务，然后由独立的 verifier agent 根据 rubric 对抗式地检查输出质量，不合格则自动修复，循环至通过或达到最大轮数。
 
@@ -364,7 +388,7 @@ python3 cc_workflows.py verify \
 4. 循环最多 `--max-rounds` 次
 5. 输出最终（ hopefully verified）结果
 
-### 原语 4 — `genfilter`（Generate-and-filter）
+### `genfilter`（Generate-and-filter）
 
 生成 N 个方案，再用 rubric 进行评分筛选，只返回质量最高的 K 个候选。
 
@@ -382,9 +406,9 @@ python3 cc_workflows.py genfilter \
 3. Judge 对每个方案打分并排序
 4. 返回 `--filter-top` 个最佳方案（含完整内容）
 
-### 原语 5 — `tournament`（Tournament）
+### `tournament`（Tournament）
 
-N 个 agent 使用不同方法竞争同一个任务，由 judge agent  pairwise 评比选出最终赢家。
+N 个 agent 使用不同方法竞争同一个任务，由 judge agent pairwise 评比选出最终赢家。
 
 ```bash
 python3 cc_workflows.py tournament \
@@ -399,7 +423,7 @@ python3 cc_workflows.py tournament \
 3. judge agent（`Explore`）根据任务要求和 judge prompt 对全部提交进行 pairwise 评估
 4. 宣布获胜者，附上评分 breakdown
 
-### 原语 6 — `loop_until`（Loop until done）
+### `loop_until`（Loop until done）
 
 对工作量不确定的任务，循环执行直到满足停止条件（而非固定次数）。
 
@@ -502,30 +526,6 @@ python3 cc_workflows.py <命令> [选项]
 
 > **注意：** `--interactive` 需要真实 TTY。在非交互子进程（Claude Code 子 agent、CI 管道）中会报 `EOFError`。需求澄清应在 Claude Code 对话中完成，确认后再执行脚本。
 
-### 输出解析
-
-Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常为空字符串，实际文本内容在 preceding `assistant` 事件的 `message.content[].text` 块中。编排器的 `_parse_claude_output` 函数会按以下顺序提取：
-
-```python
-# 1. 尝试 result.result
-output = last_result.get("result") or ""
-
-# 2. 回退：拼接所有 assistant text 块
-if not output.strip():
-    text_parts = [
-        block["text"]
-        for e in events if e.get("type") == "assistant"
-        for block in e.get("message", {}).get("content", [])
-        if block.get("type") == "text"
-    ]
-    output = "\n".join(text_parts).strip()
-
-# 3. model 字段：result.model 为空时从 modelUsage 取
-model = last_result.get("model") or list(last_result.get("modelUsage", {}).keys())[0]
-```
-
-详见 [`references/output-parsing.md`](references/output-parsing.md)。
-
 ## Superpowers 集成
 
 [Superpowers](https://github.com/obra/superpowers)（ obra 出品）是一套编码代理的最佳实践 skill 集，包含 TDD、subagent-driven-development、writing-plans、requesting-code-review、systematic-debugging、brainstorming 等。
@@ -553,6 +553,30 @@ python3 cc_workflows.py loop \
 /plugin marketplace add obra/superpowers-marketplace
 /plugin install superpowers@superpowers-marketplace
 ```
+
+### 输出解析
+
+Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常为空字符串，实际文本内容在 preceding `assistant` 事件的 `message.content[].text` 块中。编排器的 `_parse_claude_output` 函数会按以下顺序提取：
+
+```python
+# 1. 尝试 result.result
+output = last_result.get("result") or ""
+
+# 2. 回退：拼接所有 assistant text 块
+if not output.strip():
+    text_parts = [
+        block["text"]
+        for e in events if e.get("type") == "assistant"
+        for block in e.get("message", {}).get("content", [])
+        if block.get("type") == "text"
+    ]
+    output = "\n".join(text_parts).strip()
+
+# 3. model 字段：result.model 为空时从 modelUsage 取
+model = last_result.get("model") or list(last_result.get("modelUsage", {}).keys())[0]
+```
+
+详见 [`references/output-parsing.md`](references/output-parsing.md)。
 
 ## 故障排查
 
