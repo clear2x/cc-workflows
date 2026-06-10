@@ -75,6 +75,23 @@ python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
   --max-steps 100
 ```
 
+### 与官方 Dynamic Workflows 的差异
+
+Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 允许 Claude **现场编写并编排自己的 JavaScript harness**。该体系暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done），Claude 将它们作为 JS 代码组合在 workflow 文件里。
+
+Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原语** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
+
+| 官方设计模式 | 最接近的 Orchestrator 模式 | 说明 |
+|--------------|---------------------------|------|
+| Classify-and-act | `branch` | 根据条件路由到不同步骤 |
+| Fan-out-and-synthesize | `parallel` | 并发启动多个 agent，后续手动合成 |
+| Adversarial verification | `pipeline` + `parallel` | 流水线中在每个 worker 后串联 verifier |
+| Generate-and-filter | `pipeline` | 先生成步骤，再过滤/评审步骤 |
+| Tournament | `parallel` | N 个 agent 同时执行同一任务，然后 judge 结果 |
+| Loop until done | `loop` | 分段循环直到满足停止条件（max-steps 充当预算上限） |
+
+总结：官方 dynamic workflows 是 **Claude 自己写 JS、更灵活**；Claude Orchestrator 是 **用户通过 CLI 调用、更可预期、可复用、可分享**。如果你想要不写 JS 就能获得稳定、可复用的编排命令，用 Orchestrator。
+
 ## 安装
 
 ### 方式 A：`npx skills add`（推荐，一条命令）

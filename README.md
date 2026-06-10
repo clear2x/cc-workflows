@@ -75,6 +75,23 @@ Step 4: write a refactor plan" \
   --max-steps 100
 ```
 
+### How This Compares to Official Dynamic Workflows
+
+Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) let Claude **write and orchestrate its own JavaScript harness** on the fly. That system exposes 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JS code inside a workflow file.
+
+Claude Orchestrator takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
+
+| Official pattern | Closest Orchestrator mode | Notes |
+|------------------|---------------------------|-------|
+| Classify-and-act | `branch` | Route to different steps based on a condition |
+| Fan-out-and-synthesize | `parallel` | Spawn concurrent agents; manual synthesis in a follow-up step |
+| Adversarial verification | `pipeline` + `parallel` | Chain a verifier agent after each worker in a pipeline |
+| Generate-and-filter | `pipeline` | Generate step then filter/review step |
+| Tournament | `parallel` | Spawn N agents on the same task, then judge results |
+| Loop until done | `loop` | Segmented loop with stop condition (max-steps acts as budget) |
+
+In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; Claude Orchestrator is **user-invoked, CLI-driven, and convention-based**. Use Orchestrator when you want predictable, reusable, shareable commands without writing workflow JS.
+
 ## Installation
 
 ### Option A: `npx skills add` (recommended)
