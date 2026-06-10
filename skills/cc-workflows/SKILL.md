@@ -1,16 +1,18 @@
 ---
 name: cc-workflows
 description: >
-  多 Agent 动态工作流调度器。基于 claude -p 实现：单 agent 执行、多 agent 流水线、
-  条件分支、并行派发、长任务自动循环（最多 100 段）。当用户提到"长时间跑"、
-  "多 agent"、"工作流"、"pipeline"、"parallel"、"并行"、"条件分支"、
-  "orchestrator"、"调度"时触发。不用于交互模式。
-version: 1.1.0
+  多 Agent 动态工作流调度器。基于 claude -p 实现 12 种模式：6 个 CLI 原语
+  （agents/run/pipeline/branch/parallel/loop）+ 6 个官方 Workflow Pattern
+  （classify/fanout/verify/genfilter/tournament/loop_until）。
+  当用户提到"长时间跑"、"多 agent"、"工作流"、"pipeline"、"parallel"、"并行"、
+  "条件分支"、"orchestrator"、"调度"、"分类"、"扇出"、"验证"、"筛选"、
+  "锦标赛"、"循环直到"、"竞赛"时触发。不用于交互模式。
+version: 2.0.0
 ---
 
 # Claude Orchestrator Skill
 
-本 skill 提供 6 种模式的动态工作流调度，全部基于 `claude -p` 实现。
+本 skill 提供 **12 种模式** 的动态工作流调度，全部基于 `claude -p` 实现。
 
 脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/cc-workflows/cc_workflows.py`
 脚本路径（Claude Code 用户级）：`~/.claude/skills/cc-workflows/cc_workflows.py`
@@ -26,9 +28,10 @@ Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常�
 - 用户说"长时间跑"、"多 agent"、"工作流"、"pipeline"、"parallel"、"并行"
 - 用户提到"条件分支"、"orchestrator"、"调度"、"loop --max-steps"
 - 用户说"帮我跑一个长任务"、"分段执行"、"100 段"
+- 用户说"分类"、"扇出"、"验证"、"筛选"、"锦标赛"、"循环直到"、"竞赛"
 - 任务预计超过 12 轮工具调用，或需要多个 agent 协作
 
-## 6 种模式
+## 12 种模式
 
 ### 模式 1: 查看可用 agent
 
@@ -150,6 +153,72 @@ Step 4: report" --max-steps 2
 ```bash
 python3 ~/.hermes/skills/cc-workflows/cc_workflows.py sessions
 ```
+
+---
+
+## 6 种官方 Workflow Pattern
+
+### 模式 7: classify — 分类路由（Classify-and-act）
+
+先用 classifier agent 分类任务，再路由到对应 action。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py classify "这段代码有安全漏洞" \
+  --class-security "执行安全审计" \
+  --class-performance "执行性能分析" \
+  --default "一般分析"
+```
+
+### 模式 8: fanout — 扇出聚合（Fan-out-and-synthesize）
+
+并发执行子任务，然后汇总结果。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py fanout "分析代码" \
+  --subtask "检查 auth.py" --name auth \
+  --subtask "检查 api.py" --name api \
+  --synthesize "汇总成报告"
+```
+
+### 模式 9: verify — 对抗验证（Adversarial verification）
+
+执行任务后用 verifier 对抗式验证，可迭代修复。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py verify "实现功能 X" \
+  --rubric "必须有测试、错误处理、符合风格指南" \
+  --max-rounds 2
+```
+
+### 模式 10: genfilter — 生成过滤（Generate-and-filter）
+
+生成 N 个方案，用 rubric 筛选出最好的 K 个。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py genfilter "给产品起名" \
+  --count 3 --rubric "简短好记" --filter-top 1
+```
+
+### 模式 11: tournament — 锦标赛（Tournament）
+
+N 个 agent 竞争同一任务，judge 评比选出赢家。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py tournament "实现 LRU 缓存" \
+  --contestants 3 --judge "最优：正确、快速、可读"
+```
+
+### 模式 12: loop_until — 条件循环（Loop until done）
+
+循环执行任务，每轮检查停止条件，满足则退出。
+
+```bash
+python3 ~/.claude/skills/cc-workflows/cc_workflows.py loop_until "修复所有失败的测试" \
+  --stop-condition "所有 pytest 测试通过" \
+  --max-iterations 10
+```
+
+---
 
 ## 关键规则
 
