@@ -1,4 +1,4 @@
-# Claude Workflow Orchestrator
+# CC Workflows
 
 <div align="center">
 
@@ -6,7 +6,7 @@
 ![Claude Code](https://img.shields.io/badge/Claude_Code-v2.1.168%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-**A professional 12-mode multi-agent workflow orchestrator for Claude Code.**
+**A collection of multi-agent workflow primitives and patterns for Claude Code.**
 
 </div>
 
@@ -45,7 +45,7 @@
 <a name="english"></a>
 ## Overview
 
-Claude Workflow Orchestrator is a **production-grade** Python wrapper around `claude -p` (Claude Code's non-interactive headless mode). It turns one-off prompts into **repeatable, resumable, observable** workflows — without leaving your terminal.
+CC Workflows is a **production-grade** Python wrapper around `claude -p` (Claude Code's non-interactive headless mode). It turns one-off prompts into **repeatable, resumable, observable** workflows — without leaving your terminal.
 
 ### 12 Execution Modes
 
@@ -91,7 +91,7 @@ Step 4: write a refactor plan" \
 
 Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) let Claude **write and orchestrate its own JavaScript harness** on the fly. That system exposes 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JS code inside a workflow file.
 
-Claude Workflow Orchestrator takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
+CC Workflows takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
 
 | Official pattern | Closest Orchestrator mode | Notes |
 |------------------|---------------------------|-------|
@@ -102,7 +102,7 @@ Claude Workflow Orchestrator takes a different approach: it provides 6 CLI **exe
 | Tournament | `parallel` | Spawn N agents on the same task, then judge results |
 | Loop until done | `loop` | Segmented loop with stop condition (max-steps acts as budget) |
 
-In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; Claude Workflow Orchestrator is **user-invoked, CLI-driven, and convention-based**. Use Orchestrator when you want predictable, reusable, shareable commands without writing workflow JS.
+In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; CC Workflows is **user-invoked, CLI-driven, and convention-based**. Use CC Workflows when you want predictable, reusable, shareable commands without writing workflow JS.
 
 ## Installation
 
@@ -291,7 +291,7 @@ python3 claude_orchestrator.py sessions
 
 ## 6 Official Workflow Patterns
 
-Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) expose 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JavaScript. Claude Orchestrator implements each of these as a native CLI command — no JS workflow files required.
+Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) expose 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JavaScript. CC Workflows implements each of these as a native CLI command — no JS workflow files required.
 
 ### Pattern 1 — `classify`
 
@@ -496,7 +496,7 @@ Pass `--interactive` to trigger a **Superpowers brainstorming-style** pre-flight
 
 [Superpowers](https://github.com/obra/superpowers) (by obra) is a set of coding-agent best-practice skills: TDD, subagent-driven-development, writing-plans, requesting-code-review, systematic-debugging, and brainstorming.
 
-Claude Orchestrator integrates with Superpowers in two ways:
+CC Workflows integrates with Superpowers in two ways:
 
 1. **Auto-injection** — the `loop` mode detects workflow keywords and prepends the matching constraint text before each step.
 2. **Manual combination** — combine `run`/`loop` with Superpowers keywords in your prompts:

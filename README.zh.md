@@ -1,4 +1,4 @@
-# Claude Workflow Orchestrator
+# CC Workflows
 
 <div align="center">
 
@@ -46,7 +46,7 @@
 <a name="概述"></a>
 ## 概述
 
-Claude Orchestrator 是一个**生产级**的 Python 封装，底层调用 `claude -p`（Claude Code 的非交互无头模式）。它将一次性 prompt 转化为**可重复执行、断点续接、可观测**的工作流，全程在终端完成。
+CC Workflows 是一个**生产级**的 Python 封装，底层调用 `claude -p`（Claude Code 的非交互无头模式）。它将一次性 prompt 转化为**可重复执行、断点续接、可观测**的工作流，全程在终端完成。
 
 ### 12 种执行模式一览
 
@@ -86,7 +86,7 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
 
 Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 允许 Claude **现场编写并编排自己的 JavaScript harness**。该体系暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done），Claude 将它们作为 JS 代码组合在 workflow 文件里。
 
-Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原语** 和 6 个原生实现的 **官方 workflow pattern** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
+CC Workflows 走的是另一条路线：它提供 6 个 CLI **执行原语** 和 6 个原生实现的 **官方 workflow pattern** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
 
 | 官方设计模式 | Orchestrator 对应命令 | 说明 |
 |--------------|----------------------|------|
@@ -106,7 +106,7 @@ Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原�
 | 长任务循环 | `loop` | 分段循环，支持断点续接 |
 | 会话查看 | `sessions` | 查看活跃 Claude 会话 |
 
-总结：官方 dynamic workflows 是 **Claude 自己写 JS、更灵活**；Claude Orchestrator 是 **用户通过 CLI 调用、更可预期、可复用、可分享**。如果你想要不写 JS 就能获得稳定、可复用的编排命令，用 Orchestrator。
+总结：官方 dynamic workflows 是 **Claude 自己写 JS、更灵活**；CC Workflows 是 **用户通过 CLI 调用、更可预期、可复用、可分享**。如果你想要不写 JS 就能获得稳定、可复用的编排命令，用 CC Workflows。
 
 ## 安装
 
@@ -288,7 +288,7 @@ python3 claude_orchestrator.py sessions
 
 ## 6 种官方 Workflow 模式
 
-Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done）。这些模式原本需要 Claude 现场编写 JavaScript 来组合；Claude Orchestrator 将它们直接实现为原生 CLI 命令，无需编写任何 JS 工作流文件。
+Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done）。这些模式原本需要 Claude 现场编写 JavaScript 来组合；CC Workflows 将它们直接实现为原生 CLI 命令，无需编写任何 JS 工作流文件。
 
 ### 原语 1 — `classify`（Classify-and-act）
 
@@ -515,7 +515,7 @@ model = last_result.get("model") or list(last_result.get("modelUsage", {}).keys(
 
 [Superpowers](https://github.com/obra/superpowers)（ obra 出品）是一套编码代理的最佳实践 skill 集，包含 TDD、subagent-driven-development、writing-plans、requesting-code-review、systematic-debugging、brainstorming 等。
 
-Claude Orchestrator 通过两种方式与 Superpowers 集成：
+CC Workflows 通过两种方式与 Superpowers 集成：
 
 1. **自动注入** — `loop` 模式检测到工作流关键词时，自动在每步前追加对应约束文本。
 2. **手动组合** — 在 prompt 中使用 Superpowers 关键词：
