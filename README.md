@@ -487,6 +487,7 @@ Claude: 后台执行中，我会定期汇报进度。
 
 | Condition | Execution method |
 |-----------|-----------------|
+| User specifies preference | Follow user's choice |
 | Default (most tasks) | Native Workflow tool |
 | Task > 20 steps | cc_workflows.py background |
 | Need breakpoint resume | cc_workflows.py background |

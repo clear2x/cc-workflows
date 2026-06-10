@@ -365,6 +365,7 @@ return { files, analysis, plan }
 
 | 条件 | 执行方式 |
 |------|---------|
+| 用户明确指定 | ✅ 按用户选择执行 |
 | 默认（大多数任务） | ✅ 原生 Workflow 工具编排 |
 | 任务 > 20 步 | ✅ cc_workflows.py 后台 |
 | 需要断点续接 | ✅ cc_workflows.py 后台 |
