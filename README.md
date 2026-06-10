@@ -19,7 +19,7 @@
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
-- [6 Execution Modes](#6-execution-modes)
+- [6 Execution Primitives](#6-execution-primitives)
   - [Mode 1 — `agents`](#mode-1--agents)
   - [Mode 2 — `run`](#mode-2--run)
   - [Mode 3 — `pipeline`](#mode-3--pipeline)
@@ -27,6 +27,13 @@
   - [Mode 5 — `parallel`](#mode-5--parallel)
   - [Mode 6 — `loop`](#mode-6--loop)
   - [`sessions`](#sessions)
+- [6 Official Workflow Patterns](#6-official-workflow-patterns)
+  - [Pattern 1 — `classify`](#pattern-1--classify)
+  - [Pattern 2 — `fanout`](#pattern-2--fanout)
+  - [Pattern 3 — `verify`](#pattern-3--verify)
+  - [Pattern 4 — `genfilter`](#pattern-4--genfilter)
+  - [Pattern 5 — `tournament`](#pattern-5--tournament)
+  - [Pattern 6 — `loop_until`](#pattern-6--loop_until)
 - [CLI Reference](#cli-reference)
 - [Advanced Features](#advanced-features)
 - [Superpowers Integration](#superpowers-integration)
@@ -51,6 +58,12 @@ Claude Orchestrator is a **production-grade** Python wrapper around `claude -p` 
 | `parallel` | Parallel fan-out with git worktree isolation |
 | `loop` | Long-horizon segmented loop with breakpoint-resume |
 | `sessions` | Inspect active Claude sessions |
+| `classify` | Classify task → route to specialized agent (Classify-and-act) |
+| `fanout` | Spawn subtasks concurrently, then synthesize results (Fan-out-and-synthesize) |
+| `verify` | Run task, then adversarially verify & fix in loop (Adversarial verification) |
+| `genfilter` | Generate N solutions, filter with rubric, return top K (Generate-and-filter) |
+| `tournament` | N contestants compete, judge picks winner (Tournament) |
+| `loop_until` | Repeat until stop condition is MET (Loop until done) |
 
 ### Quick Start
 
@@ -277,6 +290,122 @@ Inspect active background Claude sessions and the orchestrator's own tracked sta
 python3 claude_orchestrator.py sessions
 ```
 
+## 6 Official Workflow Patterns
+
+Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) expose 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JavaScript. Claude Orchestrator implements each of these as a native CLI command — no JS workflow files required.
+
+### Pattern 1 — `classify`
+
+**Classify-and-act**: Use a classifier agent to decide the task type, then route to different agents/behaviors.
+
+```bash
+python3 claude_orchestrator.py classify \
+  "Classify this bug report: security vulnerability or performance issue?" \
+  --class-security "Run security audit, check CWE patterns, produce severity report" \
+  --class-performance "Profile the code, identify bottlenecks, suggest optimizations" \
+  --default "Run general bug analysis covering both aspects"
+```
+
+How it works:
+1. Runs a classifier agent (`Explore` by default) on your classify prompt
+2. Matches the output against your `--class-<key>` action prompts
+3. Executes the matching action prompt with `general-purpose`
+4. If no match, falls back to `--default`
+
+### Pattern 2 — `fanout`
+
+**Fan-out-and-synthesize**: Split a task into many smaller steps, run an agent on each, then synthesize results.
+
+```bash
+python3 claude_orchestrator.py fanout \
+  "Analyze the codebase for security issues" \
+  --subtask "Scan src/auth.py for auth bypasses" \
+  --subtask "Scan src/api.py for injection flaws" \
+  --subtask "Scan src/db.py for SQL injection" \
+  --synthesize "Combine all findings into a prioritized security report with remediation steps"
+```
+
+How it works:
+1. Each `--subtask` runs concurrently in its own git worktree (isolation)
+2. All subtask outputs are collected
+3. If `--synthesize` is provided, a final agent merges all results into one report
+4. Worktrees are auto-merged and cleaned up by default (`--keep-worktree` to preserve)
+
+### Pattern 3 — `verify`
+
+**Adversarial verification**: Run a task, then spawn a separate verifier agent to adversarially check the output against a rubric. Repeat until PASS or max rounds reached.
+
+```bash
+python3 claude_orchestrator.py verify \
+  "Implement a JWT authentication middleware for FastAPI" \
+  --rubric "1. Must have unit tests covering success/failure cases
+            2. Must validate token expiry
+            3. Must handle malformed tokens gracefully
+            4. Must follow project style guide (black, type hints)" \
+  --verifier-agent Explore \
+  --max-rounds 3
+```
+
+How it works:
+1. Main agent executes the task
+2. Verifier agent (`Explore` by default) scores the output against the rubric
+3. If FAIL, the main agent gets the issues and produces a corrected version
+4. Repeats up to `--max-rounds` times
+5. Outputs the final (hopefully verified) result
+
+### Pattern 4 — `genfilter`
+
+**Generate-and-filter**: Generate N ideas/solutions, then filter them by a rubric, returning only the highest quality candidates.
+
+```bash
+python3 claude_orchestrator.py genfilter \
+  "Generate 5 creative names for a CLI tool that manages dotfiles" \
+  --count 5 \
+  --rubric "Short (1-2 syllables), memorable, no common conflicts, available as npm package" \
+  --filter-top 3
+```
+
+How it works:
+1. Spawns `--count` parallel agents, each generating an independent solution
+2. All results are fed to a judge agent with the rubric
+3. Judge scores and ranks each solution
+4. Top `--filter-top` results are returned with full details
+
+### Pattern 5 — `tournament`
+
+**Tournament**: Have N agents compete on the same task using different approaches, then a judge agent picks the winner.
+
+```bash
+python3 claude_orchestrator.py tournament \
+  "Implement a thread-safe LRU cache in Python" \
+  --contestants 3 \
+  --judge "Best solution: correct thread safety, O(1) get/put, clean code, good tests"
+```
+
+How it works:
+1. Spawns `--contestants` agents, each given a different "approach" framing (direct/robust/optimized/creative/standard)
+2. All contestants run concurrently in isolated worktrees
+3. A judge agent (`Explore`) evaluates all submissions pairwise against the task + judge prompt
+4. Winner is announced with scoring breakdown
+
+### Pattern 6 — `loop_until`
+
+**Loop until done**: For tasks with an unknown amount of work, loop spawning agents until a stop condition is met (instead of a fixed number of passes).
+
+```bash
+python3 claude_orchestrator.py loop_until \
+  "Investigate why the CI pipeline is failing and fix all issues" \
+  --stop-condition "CI pipeline passes on the main branch" \
+  --max-iterations 10
+```
+
+How it works:
+1. Executes the task prompt in a loop (with session resume between iterations)
+2. After each iteration, a lightweight checker agent evaluates whether the stop condition is MET
+3. If MET → exit and show final output
+4. If NOT_MET → continue to next iteration (up to `--max-iterations`)
+5. State is persisted to `/tmp/claude_orchestrator_state.json`, survives restarts
+
 ## CLI Reference
 
 ```
@@ -291,12 +420,20 @@ commands:
   loop <prompt> [--max-steps N] [--agent X] [--interactive]   Segmented loop
   sessions                             Inspect sessions
 
+  classify <prompt> [--class-KEY "action"] [--default "action"]   Classify-and-act
+  fanout <prompt> [--subtask "X"] [--synthesize "Y"] [--agent Z]   Fan-out-and-synthesize
+  verify <prompt> [--rubric "X"] [--verifier-agent Y] [--max-rounds N]   Adversarial verification
+  genfilter <prompt> [--count N] [--rubric "X"] [--filter-top K]   Generate-and-filter
+  tournament <prompt> [--contestants N] [--judge "X"]   Tournament
+  loop_until <prompt> --stop-condition "X" [--max-iterations N]   Loop until done
+
 global:
   --dangerously-skip-permissions       Auto-injected (no approval prompts)
   --allowedTools Read,Write,Edit,Bash,Grep,Glob,TodoWrite
   --max-turns 12                       Per-step turn limit
   --output-format json                 Structured event stream
 ```
+
 
 ## Advanced Features
 

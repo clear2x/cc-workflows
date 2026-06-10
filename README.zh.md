@@ -19,7 +19,7 @@
 - [概述](#概述)
 - [快速开始](#快速开始)
 - [安装](#安装)
-- [6 种执行模式](#6-种执行模式)
+- [6 个 CLI 原语](#6-个-cli-原语)
   - [模式 1 — `agents`](#模式-1--agents)
   - [模式 2 — `run`](#模式-2--run)
   - [模式 3 — `pipeline`](#模式-3--pipeline)
@@ -27,6 +27,13 @@
   - [模式 5 — `parallel`](#模式-5--parallel)
   - [模式 6 — `loop`](#模式-6--loop)
   - [`sessions`](#sessions)
+- [6 种官方 Workflow 模式](#6-种官方-workflow-模式)
+  - [模式 1 — `classify`](#模式-1--classify)
+  - [模式 2 — `fanout`](#模式-2--fanout)
+  - [模式 3 — `verify`](#模式-3--verify)
+  - [模式 4 — `genfilter`](#模式-4--genfilter)
+  - [模式 5 — `tournament`](#模式-5--tournament)
+  - [模式 6 — `loop_until`](#模式-6--loop_until)
 - [CLI 参考](#cli-参考)
 - [高级功能](#高级功能)
 - [Superpowers 集成](#superpowers-集成)
@@ -79,16 +86,25 @@ python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
 
 Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 允许 Claude **现场编写并编排自己的 JavaScript harness**。该体系暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done），Claude 将它们作为 JS 代码组合在 workflow 文件里。
 
-Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原语** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
+Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原语** 和 6 个原生实现的 **官方 workflow pattern** — 固定的、带有 opinionated 的命令模式，底层封装 `claude -p`，并替你处理工作树、状态持久化、断点续接、Superpowers 注入等编排细节，无需手写任何 JS。
 
-| 官方设计模式 | 最接近的 Orchestrator 模式 | 说明 |
-|--------------|---------------------------|------|
-| Classify-and-act | `branch` | 根据条件路由到不同步骤 |
-| Fan-out-and-synthesize | `parallel` | 并发启动多个 agent，后续手动合成 |
-| Adversarial verification | `pipeline` + `parallel` | 流水线中在每个 worker 后串联 verifier |
-| Generate-and-filter | `pipeline` | 先生成步骤，再过滤/评审步骤 |
-| Tournament | `parallel` | N 个 agent 同时执行同一任务，然后 judge 结果 |
-| Loop until done | `loop` | 分段循环直到满足停止条件（max-steps 充当预算上限） |
+| 官方设计模式 | Orchestrator 对应命令 | 说明 |
+|--------------|----------------------|------|
+| Classify-and-act | `classify` | 分类后路由到不同 agent |
+| Fan-out-and-synthesize | `fanout` | 并发子任务 + 自动汇总 |
+| Adversarial verification | `verify` | 执行后对抗式验证 + 自动修复 |
+| Generate-and-filter | `genfilter` | 生成 N 方案，rubric 筛选 Top K |
+| Tournament | `tournament` | N 个 agent 竞争，judge 评比 |
+| Loop until done | `loop_until` | 满足停止条件前持续循环 |
+
+| 官方原语 |  Orchestrator 模式 | 说明 |
+|----------|-------------------|------|
+| 单 agent | `run` | 单次执行，支持自动续接 |
+| 流水线 | `pipeline` | 顺序多 agent 流水线 |
+| 条件分支 | `branch` | 根据条件选择不同步骤 |
+| 并行派发 | `parallel` | 并发执行，带 git worktree 隔离 |
+| 长任务循环 | `loop` | 分段循环，支持断点续接 |
+| 会话查看 | `sessions` | 查看活跃 Claude 会话 |
 
 总结：官方 dynamic workflows 是 **Claude 自己写 JS、更灵活**；Claude Orchestrator 是 **用户通过 CLI 调用、更可预期、可复用、可分享**。如果你想要不写 JS 就能获得稳定、可复用的编排命令，用 Orchestrator。
 
@@ -270,6 +286,122 @@ python3 claude_orchestrator.py loop "..." --max-steps 2
 python3 claude_orchestrator.py sessions
 ```
 
+## 6 种官方 Workflow 模式
+
+Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done）。这些模式原本需要 Claude 现场编写 JavaScript 来组合；Claude Orchestrator 将它们直接实现为原生 CLI 命令，无需编写任何 JS 工作流文件。
+
+### 模式 1 — `classify`（Classify-and-act）
+
+先用一个 classifier agent 对任务进行分类，再根据分类结果路由到不同的 agent/行为。
+
+```bash
+python3 claude_orchestrator.py classify \
+  "Classify this bug: security vulnerability or performance issue?" \
+  --class-security "Run security audit, check CWE patterns, produce severity report" \
+  --class-performance "Profile the code, identify bottlenecks, suggest optimizations" \
+  --default "Run general bug analysis covering both aspects"
+```
+
+执行流程：
+1. 使用 classifier agent（默认 `Explore`）对 classify prompt 进行分析
+2. 将输出与 `--class-<key>` 对应的 action prompt 进行匹配
+3. 执行匹配到的 action prompt（使用 `general-purpose`）
+4. 无匹配时回退到 `--default`
+
+### 模式 2 — `fanout`（Fan-out-and-synthesize）
+
+将任务拆分为多个小步骤，每个步骤由独立的 agent 并发执行，最后汇总所有结果。
+
+```bash
+python3 claude_orchestrator.py fanout \
+  "Analyze the codebase for security issues" \
+  --subtask "Scan src/auth.py for auth bypasses" \
+  --subtask "Scan src/api.py for injection flaws" \
+  --subtask "Scan src/db.py for SQL injection" \
+  --synthesize "Combine all findings into a prioritized security report"
+```
+
+执行流程：
+1. 每个 `--subtask` 在独立的 git worktree 中并发执行（隔离性好）
+2. 收集所有子任务输出
+3. 如果提供 `--synthesize`，最终 agent 会将所有结果合并为一份报告
+4. 默认自动合并并清理 worktree（`--keep-worktree` 可保留）
+
+### 模式 3 — `verify`（Adversarial verification）
+
+执行任务，然后由独立的 verifier agent 根据 rubric 对抗式地检查输出质量，不合格则自动修复，循环至通过或达到最大轮数。
+
+```bash
+python3 claude_orchestrator.py verify \
+  "Implement a JWT authentication middleware for FastAPI" \
+  --rubric "1. Must have unit tests covering success/failure cases
+            2. Must validate token expiry
+            3. Must handle malformed tokens gracefully
+            4. Must follow project style guide (black, type hints)" \
+  --verifier-agent Explore \
+  --max-rounds 3
+```
+
+执行流程：
+1. 主 agent 执行任务
+2. verifier agent（默认 `Explore`）根据 rubric 评分
+3. 如果 FAIL，主 agent 获得问题列表并生成修正版本
+4. 循环最多 `--max-rounds` 次
+5. 输出最终（ hopefully verified）结果
+
+### 模式 4 — `genfilter`（Generate-and-filter）
+
+生成 N 个方案，再用 rubric 进行评分筛选，只返回质量最高的 K 个候选。
+
+```bash
+python3 claude_orchestrator.py genfilter \
+  "Generate 5 creative names for a CLI tool that manages dotfiles" \
+  --count 5 \
+  --rubric "Short (1-2 syllables), memorable, no common conflicts, available as npm package" \
+  --filter-top 3
+```
+
+执行流程：
+1. 并发启动 `--count` 个 agent，每个独立生成一个方案
+2. 所有结果送入 judge agent 按 rubric 评分
+3. Judge 对每个方案打分并排序
+4. 返回 `--filter-top` 个最佳方案（含完整内容）
+
+### 模式 5 — `tournament`（Tournament）
+
+N 个 agent 使用不同方法竞争同一个任务，由 judge agent  pairwise 评比选出最终赢家。
+
+```bash
+python3 claude_orchestrator.py tournament \
+  "Implement a thread-safe LRU cache in Python" \
+  --contestants 3 \
+  --judge "Best solution: correct thread safety, O(1) get/put, clean code, good tests"
+```
+
+执行流程：
+1. 启动 `--contestants` 个 agent，每个采用不同的 "approach" 风格（direct / robust / optimized / creative / standard）
+2. 所有参赛者并发执行，使用独立 worktree 隔离
+3. judge agent（`Explore`）根据任务要求和 judge prompt 对全部提交进行 pairwise 评估
+4. 宣布获胜者，附上评分 breakdown
+
+### 模式 6 — `loop_until`（Loop until done）
+
+对工作量不确定的任务，循环执行直到满足停止条件（而非固定次数）。
+
+```bash
+python3 claude_orchestrator.py loop_until \
+  "Investigate why the CI pipeline is failing and fix all issues" \
+  --stop-condition "CI pipeline passes on the main branch" \
+  --max-iterations 10
+```
+
+执行流程：
+1. 在循环中执行任务 prompt（迭代间恢复 session）
+2. 每轮结束后，轻量级 checker agent 评估停止条件是否 MET
+3. MET → 退出并显示最终输出
+4. NOT_MET → 继续下一轮（最多 `--max-iterations` 次）
+5. 状态持久化到 `/tmp/claude_orchestrator_state.json`，支持重启续接
+
 ## CLI 参考
 
 ```
@@ -283,6 +415,12 @@ python3 claude_orchestrator.py <命令> [选项]
   parallel --task "X" --agent Y --name Z [...]  并行派发
   loop <prompt> [--max-steps N] [--agent X] [--interactive]  长任务循环
   sessions                                 查看会话状态
+  classify <prompt> [--class-KEY "action"] [--default "action"]  分类路由
+  fanout <prompt> [--subtask "X"] [--synthesize "Y"] [--agent Z]  并发派发+汇总
+  verify <prompt> [--rubric "X"] [--verifier-agent Y] [--max-rounds N]  对抗式验证
+  genfilter <prompt> [--count N] [--rubric "X"] [--filter-top K]  生成+筛选
+  tournament <prompt> [--contestants N] [--judge "X"]  锦标赛模式
+  loop_until <prompt> --stop-condition "X" [--max-iterations N]  条件循环
 
 全局参数（自动注入）:
   --dangerously-skip-permissions           跳过权限确认

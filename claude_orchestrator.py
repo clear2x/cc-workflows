@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 """
 claude_orchestrator.py — 多 Agent 动态工作流调度器
-基于 claude -p 实现：单 agent 执行、多 agent 流水线、条件分支、并行派发、长任务自动循环（最多 100 段）。
+基于 claude -p 实现：12 种执行模式（6 个 CLI 原语 + 6 个官方 workflow pattern）。
+
+CLI 原语:
+  agents, run, pipeline, branch, parallel, loop, sessions
+
+官方 workflow pattern（与 Anthropic 博客对齐）:
+  classify (Classify-and-act)
+  fanout  (Fan-out-and-synthesize)
+  verify  (Adversarial verification)
+  genfilter (Generate-and-filter)
+  tournament (Tournament)
+  loop_until (Loop until done)
 
 用法:
   python3 claude_orchestrator.py agents
   python3 claude_orchestrator.py run "任务描述" --agent general-purpose
-  python3 claude_orchestrator.py pipeline --step "探索:列出所有 .py 文件" --agent Explore --step "分析:评估复杂度" --agent general-purpose
-  python3 claude_orchestrator.py parallel --task "分析 a.py" --agent Explore --name a --task "分析 b.py" --agent Explore --name b
+  python3 claude_orchestrator.py pipeline --step "探索:列出所有 .py 文件" --agent Explore ...
+  python3 claude_orchestrator.py parallel --task "分析 a.py" --agent Explore --name a ...
   python3 claude_orchestrator.py loop "Step 1: list files\nStep 2: report" --max-steps 100
+  python3 claude_orchestrator.py classify "Classify bug: security or perf?" \
+      --class-security "audit..." --class-performance "profile..." --default "general..."
+  python3 claude_orchestrator.py fanout "Analyze all files" \
+      --subtask "Check auth.py" --synthesize "Combine findings"
+  python3 claude_orchestrator.py verify "Implement feature X" --rubric "Must have tests"
+  python3 claude_orchestrator.py genfilter "Generate 5 names" --count 5 --filter-top 3
+  python3 claude_orchestrator.py tournament "Implement LRU cache" --contestants 3
+  python3 claude_orchestrator.py loop_until "Fix failing tests" \
+      --stop-condition "All pytest pass" --max-iterations 10
 
 环境:
   - 需要 claude CLI v2.1.168+ 已安装
@@ -769,6 +789,33 @@ def main():
         print()
         print("  长任务 (loop):")
         print('  python3 claude_orchestrator.py loop "重构代码库" --max-steps 100')
+        print()
+        print("  Classify-and-act:")
+        print("  python3 claude_orchestrator.py classify \"Classify this bug\" \\")
+        print("    --class-security \"Run security audit...\" \\")
+        print("    --class-performance \"Run perf analysis...\" \\")
+        print("    --default \"Run general analysis...\"")
+        print()
+        print("  Fan-out-and-synthesize:")
+        print("  python3 claude_orchestrator.py fanout \"Analyze all files\" \\")
+        print("    --subtask \"Check auth.py\" --subtask \"Check api.py\" \\")
+        print("    --synthesize \"Combine findings into report\"")
+        print()
+        print("  Adversarial verification:")
+        print("  python3 claude_orchestrator.py verify \"Implement feature X\" \\")
+        print("    --rubric \"Must have tests, handle errors, follow style guide\"")
+        print()
+        print("  Generate-and-filter:")
+        print("  python3 claude_orchestrator.py genfilter \"Generate 5 CLI names\" \\")
+        print("    --count 5 --rubric \"Short, memorable\" --filter-top 3")
+        print()
+        print("  Tournament:")
+        print("  python3 claude_orchestrator.py tournament \"Implement LRU cache\" \\")
+        print("    --contestants 3 --judge \"Best: correct, fast, readable\"")
+        print()
+        print("  Loop until done:")
+        print("  python3 claude_orchestrator.py loop_until \"Fix all failing tests\" \\")
+        print("    --stop-condition \"All pytest tests pass\" --max-iterations 10")
         sys.exit(1)
 
     action = sys.argv[1]
@@ -798,9 +845,28 @@ def main():
         cmd_loop(prompt, max_steps=max_steps, agent=agent, interactive=interactive)
     elif action == "sessions":
         cmd_sessions()
+    elif action == "classify":
+        classify_prompt, actions, default_action = _parse_classify_args(remaining)
+        cmd_classify(classify_prompt, actions, default_action)
+    elif action == "fanout":
+        main_prompt, subtasks, synth_prompt, agent = _parse_fanout_args(remaining)
+        cmd_fanout(main_prompt, subtasks, synth_prompt, agent)
+    elif action == "verify":
+        task_prompt, rubric, verifier_agent, max_rounds = _parse_verify_args(remaining)
+        cmd_verify(task_prompt, rubric, verifier_agent, max_rounds)
+    elif action == "genfilter":
+        gen_prompt, count, rubric, filter_prompt, filter_top, agent = _parse_genfilter_args(remaining)
+        cmd_genfilter(gen_prompt, count, rubric, filter_prompt, filter_top, agent)
+    elif action == "tournament":
+        task_prompt, contestants, judge_prompt, agent, model = _parse_tournament_args(remaining)
+        cmd_tournament(task_prompt, contestants, judge_prompt, agent, model)
+    elif action == "loop_until":
+        task_prompt, stop_condition, max_iterations, agent = _parse_loop_until_args(remaining)
+        cmd_loop_until(task_prompt, stop_condition, max_iterations, agent)
     else:
         print(f"❌ 未知命令: {action}")
-        print("支持: agents, run, pipeline, branch, parallel, loop, sessions")
+        print("支持: agents, run, pipeline, branch, parallel, loop, sessions,")
+        print("       classify, fanout, verify, genfilter, tournament, loop_until")
         sys.exit(1)
 
 
@@ -919,6 +985,795 @@ def _parse_loop_args(args: list) -> tuple:
             i += 1
     return prompt, max_steps, agent, interactive
 
+
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  6 种官方 Workflow Pattern 实现                              ║
+# ║  Reference: https://claude.com/blog/a-harness-for-every-task ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# ── Pattern 1: Classify-and-act ───────────────────────────────
+def cmd_classify(classify_prompt: str, actions: dict, default_action: str = ""):
+    """
+    先用 classifier agent 对任务分类，再根据分类结果路由到不同 action。
+    actions: {"security": "prompt for security path", "performance": "...", ...}
+    """
+    print("🔍 Classify-and-act: 分类阶段...")
+    res = run_claude(classify_prompt, agent="Explore", max_turns=6)
+    if res.get("error"):
+        print(f"❌ 分类失败: {res.get('stderr', '')[:300]}")
+        sys.exit(1)
+
+    classification = res["output"].strip().lower()
+    print(f"   分类结果: {classification[:100]}")
+
+    # 匹配分类到 action key
+    matched_key = None
+    for key in actions:
+        if key.lower() in classification:
+            matched_key = key
+            break
+
+    if matched_key:
+        action_prompt = actions[matched_key]
+        print(f"   → 路由到 [{matched_key}]")
+    elif default_action:
+        action_prompt = default_action
+        print(f"   → 使用默认 action")
+    else:
+        print("❌ 无法匹配分类，且未提供默认 action")
+        sys.exit(1)
+
+    print(f"\n🔄 执行 action...")
+    act_res = run_claude(action_prompt, agent="general-purpose", max_turns=12)
+    if act_res.get("error"):
+        print(f"❌ Action 执行失败: {act_res.get('stderr', '')[:300]}")
+        sys.exit(1)
+
+    print(f"\n{'='*60}")
+    print(f"✅ Classify-and-act 完成")
+    print(f"{'='*60}")
+    print(act_res["output"])
+
+
+# ── Pattern 2: Fan-out-and-synthesize ──────────────────────────
+def _fanout_subtask(task_cfg: dict, worktree_base: str) -> dict:
+    """单个 fan-out 子任务（带 worktree 隔离）"""
+    name = task_cfg.get("name", "unnamed")
+    prompt = task_cfg["prompt"]
+    agent = task_cfg.get("agent")
+    model = task_cfg.get("model")
+    use_worktree = task_cfg.get("worktree", True)
+
+    worktree_path = None
+    try:
+        if use_worktree and worktree_base:
+            worktree_path = Path(worktree_base) / f"fanout-{name}"
+            branch_name = f"fanout-{name}"
+            if worktree_path.exists():
+                subprocess.run(
+                    ["git", "worktree", "remove", "--force", str(worktree_path)],
+                    capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
+                )
+                subprocess.run(
+                    ["git", "branch", "-D", branch_name],
+                    capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
+                )
+            worktree_path.mkdir(parents=True, exist_ok=True)
+            rc = subprocess.run(
+                ["git", "worktree", "add", "-b", branch_name, str(worktree_path), "HEAD"],
+                capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
+            )
+            if rc.returncode == 0:
+                print(f"  🌳 [{name}] worktree: {worktree_path}")
+            else:
+                print(f"  ⚠️ [{name}] worktree 失败，回退共享目录")
+                worktree_path = None
+
+        work_dir = str(worktree_path) if worktree_path else str(PROJECT_DIR)
+        print(f"  🚀 [{name}] 启动...")
+        res = run_claude(prompt, agent=agent, model=model, cwd=work_dir)
+        if res.get("error"):
+            return {"name": name, "error": True, "stderr": res.get("stderr", "")[:300]}
+
+        return {
+            "name": name, "error": False,
+            "output": res["output"][:2000],
+            "num_turns": res["num_turns"],
+            "cost_usd": res["total_cost_usd"],
+            "worktree": str(worktree_path) if worktree_path else None,
+        }
+    finally:
+        keep = task_cfg.get("keep_worktree", False)
+        if worktree_path and worktree_path.exists() and not keep:
+            branch_name = f"fanout-{name}"
+            merge_result = subprocess.run(
+                ["git", "merge", "--no-edit", branch_name],
+                capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
+            )
+            if merge_result.returncode == 0:
+                print(f"  🔗 [{name}] 已合并")
+            else:
+                print(f"  ⚠️ [{name}] 合并冲突，保留 worktree")
+                keep = True
+        if worktree_path and worktree_path.exists() and not keep:
+            subprocess.run(
+                ["git", "worktree", "remove", str(worktree_path)],
+                capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
+            )
+            print(f"  🧹 [{name}] worktree 已清理")
+
+
+def cmd_fanout(main_prompt: str, subtasks: list, synthesize_prompt: str = "", agent: Optional[str] = None):
+    """
+    Fan-out-and-synthesize: 并发执行子任务，然后汇总结果。
+    subtasks: list of {"prompt": str, "name": str, "agent": str}
+    """
+    print(f"🔄 Fan-out-and-synthesize: {len(subtasks)} 个子任务...")
+    WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
+
+    # Fan-out 阶段
+    fanout_results = []
+    with ThreadPoolExecutor(max_workers=min(len(subtasks), 8)) as executor:
+        futures = {
+            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            for t in subtasks
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result(timeout=CLAUDE_TIMEOUT + 10)
+                fanout_results.append(result)
+            except Exception as ex:
+                task = futures[future]
+                fanout_results.append({
+                    "name": task.get("name", "unnamed"),
+                    "error": True, "stderr": f"执行异常: {str(ex)[:200]}",
+                })
+
+    # 构建汇总上下文
+    context_parts = ["[Fan-out 结果汇总]\n"]
+    for r in fanout_results:
+        status = "✅" if not r.get("error") else "❌"
+        context_parts.append(f"\n{status} [{r['name']}]:")
+        if r.get("error"):
+            context_parts.append(f"  错误: {r.get('stderr', '')[:200]}")
+        else:
+            context_parts.append(r.get("output", "")[:1500])
+
+    fanout_context = "\n".join(context_parts)
+
+    # Synthesize 阶段
+    if synthesize_prompt:
+        print(f"\n🔄 汇总阶段...")
+        full_synth_prompt = f"{synthesize_prompt}\n\n{fanout_context}"
+        synth_res = run_claude(full_synth_prompt, agent=agent or "general-purpose", max_turns=12)
+        if synth_res.get("error"):
+            print(f"❌ 汇总失败: {synth_res.get('stderr', '')[:300]}")
+            # 仍然返回 fanout 结果
+            print(f"\n{'='*60}")
+            print("📊 Fan-out 结果（汇总失败）:")
+            for r in fanout_results:
+                status = "✅" if not r.get("error") else "❌"
+                print(f"  {status} [{r['name']}]")
+            print(f"{'='*60}")
+            return
+
+        print(f"\n{'='*60}")
+        print(f"✅ Fan-out-and-synthesize 完成")
+        print(f"   子任务: {len(fanout_results)} 个")
+        print(f"{'='*60}")
+        print(synth_res["output"])
+    else:
+        print(f"\n{'='*60}")
+        print(f"✅ Fan-out 完成（无汇总步骤）")
+        print(f"   子任务: {len(fanout_results)} 个")
+        print(f"{'='*60}")
+        for r in fanout_results:
+            status = "✅" if not r.get("error") else "❌"
+            print(f"\n{status} [{r['name']}]:")
+            if r.get("error"):
+                print(f"  错误: {r.get('stderr', '')[:200]}")
+            else:
+                print(r.get("output", "")[:1000])
+
+
+# ── Pattern 3: Adversarial verification ────────────────────────
+def cmd_verify(task_prompt: str, rubric: str, verifier_agent: str = "Explore", max_rounds: int = 2):
+    """
+    Adversarial verification: 执行任务，然后用 verifier 对结果进行对抗式验证。
+    可选的 max_rounds: 最多迭代修复轮数。
+    """
+    print("🔍 Adversarial verification: 主任务阶段...")
+    main_res = run_claude(task_prompt, agent="general-purpose", max_turns=12)
+    if main_res.get("error"):
+        print(f"❌ 主任务失败: {main_res.get('stderr', '')[:300]}")
+        sys.exit(1)
+
+    current_output = main_res["output"]
+    print(f"   主任务完成: {main_res['num_turns']} turns")
+
+    for round_num in range(max_rounds):
+        print(f"\n🔍 验证轮次 {round_num + 1}/{max_rounds}...")
+
+        verify_prompt = f"""[Verification Rubric]
+{rubric}
+
+[Task Output to Verify]
+{current_output}
+
+Evaluate the output against the rubric. Output ONLY:
+- PASS or FAIL
+- List of issues found (or "None" if PASS)
+- Severity of each issue: critical / minor"""
+
+        verify_res = run_claude(verify_prompt, agent=verifier_agent, max_turns=6)
+        if verify_res.get("error"):
+            print(f"❌ 验证失败: {verify_res.get('stderr', '')[:300]}")
+            break
+
+        verdict_text = verify_res["output"].strip()
+        print(f"   验证结果: {verdict_text[:200]}")
+
+        if verdict_text.upper().startswith("PASS"):
+            print(f"\n✅ 验证通过！")
+            break
+
+        # FAIL - 修复轮次
+        if round_num < max_rounds - 1:
+            print(f"   🔧 修复轮次...")
+            fix_prompt = f"""[Original Task]
+{task_prompt}
+
+[Previous Output (has issues)]
+{current_output}
+
+[Verification Issues]
+{verdict_text}
+
+Fix the issues above and produce corrected output."""
+            fix_res = run_claude(fix_prompt, agent="general-purpose", max_turns=12)
+            if fix_res.get("error"):
+                print(f"❌ 修复失败: {fix_res.get('stderr', '')[:300]}")
+                break
+            current_output = fix_res["output"]
+            print(f"   修复完成: {fix_res['num_turns']} turns")
+        else:
+            print(f"\n⚠️ 达到最大轮数，验证仍未通过")
+
+    print(f"\n{'='*60}")
+    print(f"✅ Adversarial verification 完成")
+    print(f"{'='*60}")
+    print(current_output)
+
+
+# ── Pattern 4: Generate-and-filter ─────────────────────────────
+def cmd_genfilter(generation_prompt: str, count: int = 3, rubric: str = "",
+                  filter_prompt: str = "", filter_top: int = 1, agent: Optional[str] = None):
+    """
+    Generate-and-filter: 生成 N 个方案，然后用 rubric 筛选出最好的 K 个。
+    """
+    print(f"🔄 Generate-and-filter: 生成 {count} 个方案...")
+
+    # 生成阶段
+    generation_tasks = []
+    for i in range(count):
+        task_prompt = f"""[Generation Task #{i+1}/{count}]
+{generation_prompt}
+
+Produce a complete, independent solution. Be creative and thorough."""
+        generation_tasks.append({
+            "prompt": task_prompt,
+            "name": f"gen-{i+1}",
+            "agent": agent or "general-purpose",
+            "worktree": True,
+        })
+
+    WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
+    gen_results = []
+    with ThreadPoolExecutor(max_workers=min(count, 8)) as executor:
+        futures = {
+            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            for t in generation_tasks
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result(timeout=CLAUDE_TIMEOUT + 10)
+                gen_results.append(result)
+            except Exception as ex:
+                task = futures[future]
+                gen_results.append({
+                    "name": task.get("name", "unnamed"),
+                    "error": True, "stderr": f"异常: {str(ex)[:200]}",
+                })
+
+    successful_gens = [r for r in gen_results if not r.get("error")]
+    if not successful_gens:
+        print("❌ 所有生成任务均失败")
+        sys.exit(1)
+
+    print(f"\n🔍 筛选阶段: 使用 rubric 筛选 top {filter_top}...")
+
+    # 构建筛选上下文
+    gen_context_parts = [f"[Generated {len(successful_gens)} Solutions]\n"]
+    for r in successful_gens:
+        gen_context_parts.append(f"\n--- {r['name']} ---\n{r.get('output', '')[:2000]}")
+    gen_context = "\n".join(gen_context_parts)
+
+    if not filter_prompt:
+        filter_prompt = f"""[Rubric for Evaluation]
+{rubric}
+
+Evaluate each solution against the rubric. Score each 1-10 on:
+1. Correctness / Completeness
+2. Quality / Robustness
+3. Alignment with rubric criteria
+
+Output ONLY a JSON array ranked by score (best first):
+[
+  {{"rank": 1, "name": "...", "score": 9, "reason": "..."}},
+  ...
+]"""
+
+    full_filter_prompt = f"{filter_prompt}\n\n{gen_context}"
+    filter_res = run_claude(full_filter_prompt, agent="Explore", max_turns=10)
+    if filter_res.get("error"):
+        print(f"❌ 筛选失败: {filter_res.get('stderr', '')[:300]}")
+        # 回退：返回所有成功生成的结果
+        print(f"\n{'='*60}")
+        print("📊 生成结果（筛选失败，返回全部）:")
+        for r in successful_gens:
+            print(f"\n--- {r['name']} ---\n{r.get('output', '')[:500]}")
+        print(f"{'='*60}")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"✅ Generate-and-filter 完成")
+    print(f"   生成: {len(successful_gens)} 个 | 筛选 Top {filter_top}")
+    print(f"{'='*60}")
+    print(filter_res["output"])
+
+    # 同时展示 top 结果的完整内容
+    print(f"\n{'='*60}")
+    print(f"📋 Top {filter_top} 方案详情:")
+    print(f"{'='*60}")
+    # 简单解析：在 filter output 里找排名靠前的 name
+    top_names = []
+    for r in successful_gens:
+        if r["name"] in filter_res["output"]:
+            top_names.append(r["name"])
+    # 如果解析失败，默认取前 filter_top 个
+    if not top_names and len(successful_gens) >= filter_top:
+        top_names = [successful_gens[i]["name"] for i in range(min(filter_top, len(successful_gens)))]
+
+    for r in successful_gens:
+        if r["name"] in top_names:
+            print(f"\n--- {r['name']} ---\n{r.get('output', '')[:2000]}")
+
+
+# ── Pattern 5: Tournament ──────────────────────────────────────
+def cmd_tournament(task_prompt: str, contestants: int = 3,
+                   judge_prompt: str = "", agent: Optional[str] = None,
+                   model: Optional[str] = None):
+    """
+    Tournament: N 个 agent 竞争同一任务，judge agent  pairwise 评比选出赢家。
+    """
+    print(f"🏆 Tournament: {contestants} 个参赛者...")
+
+    # Contestants 阶段
+    contest_tasks = []
+    approaches = [
+        "Approach A: Use a simple, direct implementation with minimal dependencies.",
+        "Approach B: Use a robust, production-grade implementation with full error handling.",
+        "Approach C: Use an optimized implementation prioritizing performance.",
+        "Approach D: Use a creative, unconventional approach that might have unique advantages.",
+        "Approach E: Use a well-tested, standard library-only approach.",
+    ]
+    for i in range(contestants):
+        approach = approaches[i % len(approaches)]
+        task_prompt_i = f"""[Tournament Entry #{i+1}/{contestants}]
+{approach}
+
+[Task]
+{task_prompt}
+
+Produce your best complete solution following your approach. Be thorough."""
+        contest_tasks.append({
+            "prompt": task_prompt_i,
+            "name": f"contestant-{i+1}",
+            "agent": agent or "general-purpose",
+            "model": model,
+            "worktree": True,
+        })
+
+    WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
+    contest_results = []
+    with ThreadPoolExecutor(max_workers=min(contestants, 8)) as executor:
+        futures = {
+            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            for t in contest_tasks
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result(timeout=CLAUDE_TIMEOUT + 10)
+                contest_results.append(result)
+            except Exception as ex:
+                task = futures[future]
+                contest_results.append({
+                    "name": task.get("name", "unnamed"),
+                    "error": True, "stderr": f"异常: {str(ex)[:200]}",
+                })
+
+    successful = [r for r in contest_results if not r.get("error")]
+    if len(successful) < 2:
+        print(f"❌ 需要至少 2 个成功参赛者，实际: {len(successful)}")
+        if successful:
+            print(f"\n{'='*60}")
+            print(f"🏆 唯一获胜者: {successful[0]['name']}")
+            print(f"{'='*60}")
+            print(successful[0].get("output", "")[:2000])
+        sys.exit(1)
+
+    # Judge 阶段
+    print(f"\n⚖️ Judge 阶段: 评比 {len(successful)} 个方案...")
+
+    contest_context_parts = [f"[Tournament Task]\n{task_prompt}\n\n[Contestant Submissions]\n"]
+    for r in successful:
+        contest_context_parts.append(f"\n--- {r['name']} ---\n{r.get('output', '')[:2000]}")
+    contest_context = "\n".join(contest_context_parts)
+
+    if not judge_prompt:
+        judge_prompt = """You are an expert judge. Evaluate each contestant submission against the task requirements.
+
+For each submission, score 1-10 on:
+1. Correctness (does it solve the task?)
+2. Code quality (readability, structure)
+3. Robustness (error handling, edge cases)
+4. Efficiency (performance considerations)
+
+Output a JSON array ranked by overall score:
+[
+  {"rank": 1, "name": "contestant-1", "score": 8.5, "reason": "..."},
+  ...
+]
+
+Be critical but fair. The winner should have a clear advantage."""
+
+    full_judge_prompt = f"{judge_prompt}\n\n{contest_context}"
+    judge_res = run_claude(full_judge_prompt, agent="Explore", max_turns=10)
+    if judge_res.get("error"):
+        print(f"❌ Judge 失败: {judge_res.get('stderr', '')[:300]}")
+        print(f"\n{'='*60}")
+        print("📊 参赛结果（Judge 失败）:")
+        for r in successful:
+            print(f"\n--- {r['name']} ---\n{r.get('output', '')[:500]}")
+        print(f"{'='*60}")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"🏆 Tournament 完成")
+    print(f"   参赛者: {len(successful)} 个")
+    print(f"{'='*60}")
+    print(judge_res["output"])
+
+    # 展示获胜者详情
+    print(f"\n{'='*60}")
+    print(f"🥇 获胜方案详情:")
+    print(f"{'='*60}")
+    # 从 judge output 里尝试提取第一名名字
+    winner_name = None
+    for r in successful:
+        if r["name"] in judge_res["output"] and "rank" in judge_res["output"].lower():
+            # 简单启发式：judge output 中先出现的参赛者名字更可能是赢家
+            if winner_name is None or judge_res["output"].index(r["name"]) < judge_res["output"].index(winner_name):
+                winner_name = r["name"]
+    if not winner_name:
+        winner_name = successful[0]["name"]
+    for r in successful:
+        if r["name"] == winner_name:
+            print(f"\n--- {r['name']} ---\n{r.get('output', '')[:3000]}")
+            break
+
+
+# ── Pattern 6: Loop until done ─────────────────────────────────
+def cmd_loop_until(task_prompt: str, stop_condition: str, max_iterations: int = 10,
+                   agent: Optional[str] = None):
+    """
+    Loop until done: 循环执行任务，每次检查停止条件，满足则退出。
+    stop_condition: 描述停止条件的文本（Claude 每次执行后评估是否满足）。
+    """
+    print(f"🔁 Loop until done: 最多 {max_iterations} 轮")
+    print(f"   停止条件: {stop_condition[:80]}...")
+
+    state = load_state()
+    saved_iter = state.get("loop_until_iter", 0)
+    saved_session = state.get("session_id")
+    saved_history = state.get("loop_until_history", [])
+
+    if saved_iter > 0 and saved_session:
+        print(f"🔄 从第 {saved_iter + 1} 轮继续...")
+        start_iter = saved_iter
+    else:
+        start_iter = 0
+        saved_history = []
+
+    session_id = saved_session
+    iteration = start_iter
+
+    while iteration < max_iterations:
+        iteration += 1
+        print(f"\n📌 轮次 {iteration}/{max_iterations}...")
+
+        context_summary = ""
+        if saved_history:
+            context_summary = "\n\n[之前轮次摘要]\n"
+            for h in saved_history[-2:]:
+                context_summary += f"- 轮次 {h['iter']}: {h.get('outcome', '')[:120]}\n"
+            context_summary += "\n[当前任务]\n"
+
+        exec_prompt = f"{context_summary}{task_prompt}"
+        res = run_claude(exec_prompt, session_id, agent=agent)
+
+        if res.get("error"):
+            print(f"❌ 轮次 {iteration} 失败: {res.get('stderr', '')[:300]}")
+            save_state({
+                "session_id": session_id,
+                "loop_until_iter": iteration,
+                "loop_until_history": saved_history,
+            })
+            sys.exit(1)
+
+        session_id = res["session_id"]
+        output = res["output"]
+        print(f"   完成: {res['num_turns']} turns, ${res['total_cost_usd']:.4f}")
+
+        # 检查停止条件
+        print(f"\n🔍 检查停止条件...")
+        check_prompt = f"""[Task Output]
+{output[:3000]}
+
+[Stop Condition]
+{stop_condition}
+
+Has the stop condition been met? Output ONLY: MET or NOT_MET, followed by a brief reason."""
+        check_res = run_claude(check_prompt, agent="Explore", max_turns=3)
+        check_output = check_res.get("output", "").strip() if not check_res.get("error") else ""
+
+        if check_output.upper().startswith("MET"):
+            outcome = "MET"
+            print(f"   ✅ 停止条件已满足: {check_output[:120]}")
+            saved_history.append({"iter": iteration, "outcome": outcome, "output_preview": output[:200]})
+            total_cost = sum(h.get("cost_usd", 0) for h in saved_history)
+            total_turns = sum(h.get("num_turns", 0) for h in saved_history)
+            print(f"\n🎉 Loop until done 完成！")
+            print(f"   总轮次: {iteration} | 累计: {total_turns} 轮, ${total_cost:.4f}")
+            save_state({"session_id": None, "loop_until_iter": 0, "loop_until_history": []})
+            print(f"\n{'='*60}")
+            print(output)
+            return
+        else:
+            outcome = f"NOT_MET: {check_output[:100]}"
+            print(f"   ⏳ 未满足: {check_output[:120]}")
+
+        saved_history.append({
+            "iter": iteration, "outcome": outcome,
+            "output_preview": output[:200],
+            "cost_usd": res["total_cost_usd"],
+            "num_turns": res["num_turns"],
+        })
+        save_state({
+            "session_id": session_id,
+            "loop_until_iter": iteration,
+            "loop_until_history": saved_history,
+        })
+
+    print(f"\n⚠️ 达到最大轮数 {max_iterations}，停止条件仍未满足")
+    total_cost = sum(h.get("cost_usd", 0) for h in saved_history)
+    total_turns = sum(h.get("num_turns", 0) for h in saved_history)
+    print(f"   累计: {total_turns} 轮, ${total_cost:.4f}")
+    print(f"\n{'='*60}")
+    print(f"📋 最后一轮输出:")
+    print(f"{'='*60}")
+    print(output)
+
+
+
+# ── 参数解析: classify ────────────────────────────────────────
+def _parse_classify_args(args: list) -> tuple:
+    classify_prompt = ""
+    actions = {}
+    default_action = ""
+    i = 0
+    current_class = None
+    while i < len(args):
+        if args[i] == "--classify" and i + 1 < len(args):
+            classify_prompt = args[i + 1]
+            i += 2
+        elif args[i] == "--default" and i + 1 < len(args):
+            default_action = args[i + 1]
+            i += 2
+        elif args[i].startswith("--class-") and i + 1 < len(args):
+            key = args[i].replace("--class-", "")
+            actions[key] = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not classify_prompt:
+            classify_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if not classify_prompt:
+        print("❌ classify 需要 --classify 或 positional prompt")
+        sys.exit(1)
+    return classify_prompt, actions, default_action
+
+
+# ── 参数解析: fanout ──────────────────────────────────────────
+def _parse_fanout_args(args: list) -> tuple:
+    main_prompt = ""
+    subtasks = []
+    synthesize_prompt = ""
+    agent = None
+    current = None
+    i = 0
+    while i < len(args):
+        if args[i] == "--subtask" and i + 1 < len(args):
+            if current:
+                subtasks.append(current)
+            current = {"prompt": args[i + 1], "name": f"task-{len(subtasks)+1}"}
+            i += 2
+        elif args[i] == "--synthesize" and i + 1 < len(args):
+            if current:
+                subtasks.append(current)
+                current = None
+            synthesize_prompt = args[i + 1]
+            i += 2
+        elif args[i] == "--agent" and i + 1 < len(args):
+            if current:
+                current["agent"] = args[i + 1]
+            else:
+                agent = args[i + 1]
+            i += 2
+        elif args[i] == "--name" and i + 1 < len(args) and current:
+            current["name"] = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not main_prompt:
+            main_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if current:
+        subtasks.append(current)
+    if not main_prompt and not subtasks:
+        print("❌ fanout 需要 --subtask 或 positional prompt")
+        sys.exit(1)
+    return main_prompt, subtasks, synthesize_prompt, agent
+
+
+# ── 参数解析: verify ──────────────────────────────────────────
+def _parse_verify_args(args: list) -> tuple:
+    task_prompt = ""
+    rubric = ""
+    verifier_agent = "Explore"
+    max_rounds = 2
+    i = 0
+    while i < len(args):
+        if args[i] == "--rubric" and i + 1 < len(args):
+            rubric = args[i + 1]
+            i += 2
+        elif args[i] == "--verifier-agent" and i + 1 < len(args):
+            verifier_agent = args[i + 1]
+            i += 2
+        elif args[i] == "--max-rounds" and i + 1 < len(args):
+            max_rounds = int(args[i + 1])
+            i += 2
+        elif not args[i].startswith("--") and not task_prompt:
+            task_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if not task_prompt:
+        print("❌ verify 需要 positional task prompt")
+        sys.exit(1)
+    return task_prompt, rubric, verifier_agent, max_rounds
+
+
+# ── 参数解析: genfilter ───────────────────────────────────────
+def _parse_genfilter_args(args: list) -> tuple:
+    gen_prompt = ""
+    count = 3
+    rubric = ""
+    filter_prompt = ""
+    filter_top = 1
+    agent = None
+    i = 0
+    while i < len(args):
+        if args[i] == "--count" and i + 1 < len(args):
+            count = int(args[i + 1])
+            i += 2
+        elif args[i] == "--rubric" and i + 1 < len(args):
+            rubric = args[i + 1]
+            i += 2
+        elif args[i] == "--filter-prompt" and i + 1 < len(args):
+            filter_prompt = args[i + 1]
+            i += 2
+        elif args[i] == "--filter-top" and i + 1 < len(args):
+            filter_top = int(args[i + 1])
+            i += 2
+        elif args[i] == "--agent" and i + 1 < len(args):
+            agent = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not gen_prompt:
+            gen_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if not gen_prompt:
+        print("❌ genfilter 需要 positional generation prompt")
+        sys.exit(1)
+    return gen_prompt, count, rubric, filter_prompt, filter_top, agent
+
+
+# ── 参数解析: tournament ──────────────────────────────────────
+def _parse_tournament_args(args: list) -> tuple:
+    task_prompt = ""
+    contestants = 3
+    judge_prompt = ""
+    agent = None
+    model = None
+    i = 0
+    while i < len(args):
+        if args[i] == "--contestants" and i + 1 < len(args):
+            contestants = int(args[i + 1])
+            i += 2
+        elif args[i] == "--judge" and i + 1 < len(args):
+            judge_prompt = args[i + 1]
+            i += 2
+        elif args[i] == "--agent" and i + 1 < len(args):
+            agent = args[i + 1]
+            i += 2
+        elif args[i] == "--model" and i + 1 < len(args):
+            model = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not task_prompt:
+            task_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if not task_prompt:
+        print("❌ tournament 需要 positional task prompt")
+        sys.exit(1)
+    return task_prompt, contestants, judge_prompt, agent, model
+
+
+# ── 参数解析: loop_until ──────────────────────────────────────
+def _parse_loop_until_args(args: list) -> tuple:
+    task_prompt = ""
+    stop_condition = ""
+    max_iterations = 10
+    agent = None
+    i = 0
+    while i < len(args):
+        if args[i] == "--stop-condition" and i + 1 < len(args):
+            stop_condition = args[i + 1]
+            i += 2
+        elif args[i] == "--max-iterations" and i + 1 < len(args):
+            max_iterations = int(args[i + 1])
+            i += 2
+        elif args[i] == "--agent" and i + 1 < len(args):
+            agent = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not task_prompt:
+            task_prompt = args[i]
+            i += 1
+        else:
+            i += 1
+    if not task_prompt:
+        print("❌ loop_until 需要 positional task prompt")
+        sys.exit(1)
+    if not stop_condition:
+        print("❌ loop_until 需要 --stop-condition")
+        sys.exit(1)
+    return task_prompt, stop_condition, max_iterations, agent
 
 if __name__ == "__main__":
     main()
