@@ -72,15 +72,18 @@ def install():
     install_skill(MAIN_SKILL, TARGET_CC, dry_run)
     print(f"Installed for Claude Code: {TARGET_CC}")
 
-    # 3. Individual mode skills
+    # 3. Individual mode skills (安装到 skills/ 顶层，Claude Code 扫描 ~/.claude/skills/*/SKILL.md)
+    CC_SKILLS_ROOT = Path.home() / ".claude" / "skills"
+    HERMES_SKILLS_ROOT = Path.home() / ".hermes" / "skills"
     for skill_dir in sorted(SKILLS_DIR.iterdir()):
         if not skill_dir.is_dir() or skill_dir.name in ("cc-workflows", "__pycache__"):
             continue
         if not (skill_dir / "SKILL.md").exists():
             continue
 
-        cc_dest = TARGET_CC / skill_dir.name
-        hermes_dest = TARGET_HERMES / skill_dir.name
+        # 安装到顶层：~/.claude/skills/cc-run/ 而非 ~/.claude/skills/cc-workflows/cc-run/
+        cc_dest = CC_SKILLS_ROOT / skill_dir.name
+        hermes_dest = HERMES_SKILLS_ROOT / skill_dir.name
         install_skill(skill_dir, cc_dest, dry_run)
         install_skill(skill_dir, hermes_dest, dry_run)
         print(f"  + {skill_dir.name}")
