@@ -421,6 +421,7 @@ cc_workflows.py <命令> [选项]
   parallel --task "X" --agent Y --name Z [...]  并行派发
   loop <prompt> [--max-steps N] [--agent X] [--interactive]  长任务循环
   sessions                                 查看会话状态
+  progress                                 查看正在执行的任务进度
   classify <prompt> [--class-KEY "action"] [--default "action"]  分类路由
   fanout <prompt> [--subtask "X"] [--synthesize "Y"] [--agent Z]  并发派发+汇总
   verify <prompt> [--rubric "X"] [--verifier-agent Y] [--max-rounds N]  对抗式验证
@@ -436,6 +437,43 @@ cc_workflows.py <命令> [选项]
 ```
 
 ## 高级功能
+
+### 执行过程中的进度反馈
+
+CC Workflows 在每步执行完成后自动将结构化进度写入 `/tmp/cc-workflows-progress.json`，支持 Claude Code 对话中的**实时进度汇报**。
+
+**工作机制：**
+
+- **短任务**（< 12 轮）：前台执行，Claude 直接展示结果。
+- **长任务**（> 12 轮，或 parallel/loop/verify 模式）：Claude 后台执行，定期轮询进度文件并向你汇报。
+
+```
+💬 在 Claude Code 中：
+> /cc-workflows parallel 并行分析这 3 个文件
+
+Claude: 好的，后台执行中，我会定期汇报进度。
+
+[30秒后 Claude 自动汇报]
+📊 进度：
+  ✅ [auth] 完成, 4 turns, $0.02
+  🔄 [api] 执行中...
+  🔄 [db] 执行中...
+
+[60秒后]
+📊 全部完成：
+  ✅ [auth] 4 turns, $0.02
+  ✅ [api] 3 turns, $0.02
+  ✅ [db] 5 turns, $0.03
+  💰 总计: $0.07
+```
+
+手动查看进度：
+
+```
+💬 > /cc-workflows progress
+```
+
+支持的模式：`loop`、`parallel`、`pipeline`、`verify`、`loop_until`。任务完成后进度文件自动清理。
 
 ### 自动检测项目根目录
 

@@ -75,9 +75,29 @@ def _detect_project_dir() -> Path:
 MAX_TURNS = 12
 MAX_STEPS = 100
 STATE_FILE = Path("/tmp/claude_orchestrator_state.json")
+PROGRESS_FILE = Path("/tmp/cc-workflows-progress.json")
 PROJECT_DIR = _detect_project_dir()
 WORKTREE_BASE = Path("/tmp/orchestrator-worktrees")
 CLAUDE_TIMEOUT = 300
+
+
+# ── 进度反馈 ──────────────────────────────────────────
+def write_progress(progress: dict):
+    """写入进度文件，供 Claude Code 后台轮询读取。完成时传 mode=None 清理。"""
+    if progress.get("_cleanup"):
+        PROGRESS_FILE.unlink(missing_ok=True)
+        return
+    progress["updated_at"] = time.strftime("%H:%M:%S")
+    with open(PROGRESS_FILE, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        json.dump(progress, f, indent=2, ensure_ascii=False)
+        f.flush()
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def clear_progress():
+    """任务完成后清理进度文件"""
+    PROGRESS_FILE.unlink(missing_ok=True)
 
 
 # ── 基础执行 ──────────────────────────────────────────
@@ -320,18 +340,29 @@ def cmd_pipeline(steps: list):
     first = steps[0]
     total_steps = len(steps)
     print(f"🚀 流水线启动: Step 1/{total_steps}")
+
+    # 写入初始进度
+    write_progress({"mode": "pipeline", "status": "running", "total_steps": total_steps, "completed_steps": 0, "tasks": []})
+
     res = run_claude(first["prompt"], agent=first.get("agent"))
     if res.get("error"):
         print(f"❌ Step 1 失败: {res.get('stderr', '')[:300]}")
+        clear_progress()
         sys.exit(1)
     session_id = res["session_id"]
-    state = {"session_id": session_id, "next_step": 2, "history": [{
+    history = [{
         "step": 1, "agent": first.get("agent"),
         "stop_reason": res["stop_reason"], "num_turns": res["num_turns"],
         "cost_usd": res["total_cost_usd"], "output": res["output"][:500],
-    }]}
+    }]
+    state = {"session_id": session_id, "next_step": 2, "history": history}
     save_state(state)
     _print_step_result(1, res)
+
+    # 更新进度
+    write_progress({"mode": "pipeline", "status": "running", "total_steps": total_steps, "completed_steps": 1,
+        "tasks": [{"step": 1, "status": "done", "turns": res["num_turns"], "cost_usd": res["total_cost_usd"]}]})
+
     remaining = steps[1:]
 
     for i, step_cfg in enumerate(remaining, start=2):
@@ -339,23 +370,32 @@ def cmd_pipeline(steps: list):
         res = run_claude(step_cfg["prompt"], session_id, agent=step_cfg.get("agent"))
         if res.get("error"):
             print(f"❌ Step {i} 失败: {res.get('stderr', '')[:300]}")
+            clear_progress()
             sys.exit(1)
 
         session_id = res["session_id"]
         state["session_id"] = session_id
         state["next_step"] = i + 1
-        state["history"].append({
+        history.append({
             "step": i, "agent": step_cfg.get("agent"),
             "stop_reason": res["stop_reason"], "num_turns": res["num_turns"],
             "cost_usd": res["total_cost_usd"], "output": res["output"][:500],
         })
+        state["history"] = history
         save_state(state)
         _print_step_result(i, res)
 
-    print(f"\n🎉 流水线完成！共 {len(state['history'])} 步")
-    total_cost = sum(h["cost_usd"] for h in state["history"])
-    total_turns = sum(h["num_turns"] for h in state["history"])
+        # 更新进度
+        write_progress({"mode": "pipeline", "status": "running", "total_steps": total_steps, "completed_steps": i,
+            "tasks": [{"step": h["step"], "status": "done", "turns": h["num_turns"], "cost_usd": h["cost_usd"]} for h in history]})
+
+    total_cost = sum(h["cost_usd"] for h in history)
+    total_turns = sum(h["num_turns"] for h in history)
+    print(f"\n🎉 流水线完成！共 {len(history)} 步")
     print(f"   累计: {total_turns} 轮, ${total_cost:.4f}")
+    write_progress({"mode": "pipeline", "status": "done", "total_steps": total_steps, "completed_steps": total_steps,
+        "cost_usd": total_cost, "tasks": [{"step": h["step"], "status": "done", "turns": h["num_turns"], "cost_usd": h["cost_usd"]} for h in history]})
+    clear_progress()
 
 
 # ── 模式 4: 条件分支 ──────────────────────────────────
@@ -582,6 +622,16 @@ def cmd_parallel(tasks: list):
     print(f"🔄 并行执行 {len(tasks)} 个任务...")
     keep_all = any(t.get("keep_worktree", False) for t in tasks)
 
+    # 写入初始进度
+    task_names = [t.get("name", f"task_{i}") for i, t in enumerate(tasks)]
+    write_progress({
+        "mode": "parallel",
+        "status": "running",
+        "total_tasks": len(tasks),
+        "completed_tasks": 0,
+        "tasks": [{"name": n, "status": "running"} for n in task_names],
+    })
+
     results = []
     WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=max(1, min(len(tasks), 8))) as executor:
@@ -598,6 +648,27 @@ def cmd_parallel(tasks: list):
                     "stderr": f"执行异常: {str(ex)[:200]}",
                 })
 
+            # 每个任务完成后更新进度
+            completed_names = {r["name"] for r in results if not r.get("error")}
+            running_names = [n for n in task_names if n not in completed_names and n not in {r["name"] for r in results if r.get("error")}]
+            failed_names = {r["name"] for r in results if r.get("error")}
+            write_progress({
+                "mode": "parallel",
+                "status": "running",
+                "total_tasks": len(tasks),
+                "completed_tasks": len(results),
+                "tasks": [
+                    {"name": n, "status": "done", "turns": next((r.get("num_turns", 0) for r in results if r["name"] == n), 0),
+                     "cost_usd": next((r.get("cost_usd", 0) for r in results if r["name"] == n), 0)}
+                    for n in completed_names
+                ] + [
+                    {"name": n, "status": "failed", "error": next((r.get("stderr", "")[:100] for r in results if r["name"] == n), "")}
+                    for n in failed_names
+                ] + [
+                    {"name": n, "status": "running"} for n in running_names
+                ],
+            })
+
     # 主线程顺序合并 worktree 分支（避免 index.lock 竞争）
     _merge_and_cleanup(results, "orchestrator", keep_all=keep_all)
 
@@ -611,6 +682,17 @@ def cmd_parallel(tasks: list):
         else:
             print(f"    错误: {r.get('stderr','')[:100]}")
     print(f"{'='*60}")
+
+    # 完成后写入最终进度并清理
+    total_cost = sum(r.get("cost_usd", 0) for r in results)
+    write_progress({
+        "mode": "parallel", "status": "done",
+        "total_tasks": len(tasks), "completed_tasks": len(results),
+        "cost_usd": total_cost,
+        "tasks": [{"name": r["name"], "status": "done" if not r.get("error") else "failed",
+                   "turns": r.get("num_turns", 0), "cost_usd": r.get("cost_usd", 0)} for r in results],
+    })
+    clear_progress()
 
 
 # ── 交互式澄清（Superpowers brainstorming 风格） ───────
@@ -711,6 +793,17 @@ def cmd_loop(prompt: str, max_steps: int = MAX_STEPS, agent: Optional[str] = Non
     print(f"🔢 每段 {MAX_TURNS} 轮")
     print(f"{'='*60}")
 
+    # 写入初始进度
+    write_progress({
+        "mode": "loop",
+        "status": "running",
+        "total_steps": len(all_steps),
+        "completed_steps": executed_count,
+        "current_step": None,
+        "cost_usd": sum(h.get("cost_usd", 0) for h in history),
+        "tasks": [],
+    })
+
     executed_count = len(all_steps) - len(remaining)
     for i, step_prompt in enumerate(remaining[:max_steps]):
         current_step = executed_count + i + 1
@@ -783,12 +876,36 @@ def cmd_loop(prompt: str, max_steps: int = MAX_STEPS, agent: Optional[str] = Non
         print(f"{'='*60}")
         print(res["output"][:1500])
 
+        # 写入进度
+        total_cost_so_far = sum(h["cost_usd"] for h in history)
+        write_progress({
+            "mode": "loop",
+            "status": "running",
+            "total_steps": len(all_steps),
+            "completed_steps": current_step,
+            "current_step": current_step,
+            "current_step_preview": step_prompt[:80],
+            "cost_usd": total_cost_so_far,
+            "tasks": [{
+                "step": h["step"],
+                "status": "done",
+                "turns": h["num_turns"],
+                "cost_usd": h["cost_usd"],
+            } for h in history],
+        })
+
         remaining_after = remaining[i + 1:]
         if not remaining_after:
             total_cost = sum(h["cost_usd"] for h in history)
             total_turns = sum(h["num_turns"] for h in history)
             print(f"\n🎉 全部 {len(all_steps)} 步完成！累计 {total_turns} 轮, ${total_cost:.4f}")
-            save_state({"session_id": None, "remaining_steps": [], "history": [], "next_step": 1})
+            write_progress({
+                "mode": "loop", "status": "done",
+                "total_steps": len(all_steps), "completed_steps": len(all_steps),
+                "cost_usd": total_cost,
+                "tasks": [{"step": h["step"], "status": "done", "turns": h["num_turns"], "cost_usd": h["cost_usd"]} for h in history],
+            })
+            clear_progress()
             return
 
         save_state({
@@ -846,6 +963,88 @@ def cmd_sessions():
         print(f"   Step: {step}")
         print(f"   已执行: {len(hist)} 步")
         print(f"   累计: ${total_cost:.4f}")
+
+
+# ── 进度查询 ──────────────────────────────────────────
+def cmd_progress():
+    """读取进度文件并格式化输出，供 Claude Code 轮询使用"""
+    if not PROGRESS_FILE.exists():
+        print("📭 没有正在执行的工作流任务")
+        return
+
+    try:
+        with open(PROGRESS_FILE, "r") as f:
+            progress = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        print("⚠️ 进度文件损坏")
+        return
+
+    mode = progress.get("mode", "unknown")
+    status = progress.get("status", "unknown")
+    updated = progress.get("updated_at", "?")
+    tasks = progress.get("tasks", [])
+
+    if status == "done":
+        cost = progress.get("cost_usd", 0)
+        print(f"✅ {mode} 已完成 | 💰 ${cost:.4f} | 更新于 {updated}")
+        for t in tasks:
+            name = t.get("name", t.get("step", t.get("iter", "?")))
+            t_status = t.get("status", "?")
+            turns = t.get("turns", "")
+            t_cost = t.get("cost_usd", "")
+            print(f"  • [{name}] {t_status}" + (f" | {turns} turns" if turns else "") + (f" | ${t_cost:.4f}" if t_cost else ""))
+        return
+
+    # running
+    print(f"🔄 {mode} 执行中 | 更新于 {updated}")
+
+    if mode == "loop":
+        total = progress.get("total_steps", "?")
+        completed = progress.get("completed_steps", 0)
+        current = progress.get("current_step")
+        cost = progress.get("cost_usd", 0)
+        preview = progress.get("current_step_preview", "")
+        print(f"   进度: {completed}/{total} 步 | 💰 ${cost:.4f}")
+        if current:
+            print(f"   当前: Step {current} — {preview}")
+        for t in tasks:
+            print(f"  ✅ Step {t['step']} | {t['turns']} turns | ${t['cost_usd']:.4f}")
+
+    elif mode == "parallel":
+        total = progress.get("total_tasks", "?")
+        completed = progress.get("completed_tasks", 0)
+        print(f"   进度: {completed}/{total} 任务")
+        for t in tasks:
+            t_status = t.get("status", "?")
+            icon = "✅" if t_status == "done" else "❌" if t_status == "failed" else "🔄"
+            name = t["name"]
+            turns = t.get("turns", "")
+            t_cost = t.get("cost_usd", "")
+            print(f"  {icon} [{name}]" + (f" {turns} turns, ${t_cost:.4f}" if turns else ""))
+
+    elif mode == "pipeline":
+        total = progress.get("total_steps", "?")
+        completed = progress.get("completed_steps", 0)
+        print(f"   进度: {completed}/{total} 步")
+        for t in tasks:
+            print(f"  ✅ Step {t['step']} | {t['turns']} turns | ${t['cost_usd']:.4f}")
+
+    elif mode == "verify":
+        phase = progress.get("phase", "?")
+        current_round = progress.get("current_round", 0)
+        max_rounds = progress.get("max_rounds", "?")
+        print(f"   阶段: {phase} | 轮次: {current_round}/{max_rounds}")
+
+    elif mode == "loop_until":
+        current_iter = progress.get("current_iteration", 0)
+        max_iter = progress.get("max_iterations", "?")
+        cost = progress.get("cost_usd", 0)
+        print(f"   轮次: {current_iter}/{max_iter} | 💰 ${cost:.4f}")
+        for t in tasks:
+            print(f"  • 轮次 {t['iter']}: {t.get('outcome', '')[:60]}")
+
+    else:
+        print(f"   {json.dumps(progress, ensure_ascii=False)[:200]}")
 
 
 # ── 入口 ──────────────────────────────────────────────
@@ -933,6 +1132,8 @@ def main():
         cmd_loop(prompt, max_steps=max_steps, agent=agent, interactive=interactive)
     elif action == "sessions":
         cmd_sessions()
+    elif action == "progress":
+        cmd_progress()
     elif action == "classify":
         classify_prompt, actions, default_action = _parse_classify_args(remaining)
         cmd_classify(classify_prompt, actions, default_action)
@@ -1214,9 +1415,14 @@ def cmd_verify(task_prompt: str, rubric: str, verifier_agent: str = "Explore", m
     可选的 max_rounds: 最多迭代修复轮数。
     """
     print("🔍 Adversarial verification: 主任务阶段...")
+
+    # 写入初始进度
+    write_progress({"mode": "verify", "status": "running", "phase": "executing", "max_rounds": max_rounds, "current_round": 0, "tasks": []})
+
     main_res = run_claude(task_prompt, agent="general-purpose", max_turns=12)
     if main_res.get("error"):
         print(f"❌ 主任务失败: {main_res.get('stderr', '')[:300]}")
+        clear_progress()
         sys.exit(1)
 
     current_output = main_res["output"]
@@ -1224,6 +1430,11 @@ def cmd_verify(task_prompt: str, rubric: str, verifier_agent: str = "Explore", m
 
     for round_num in range(max_rounds):
         print(f"\n🔍 验证轮次 {round_num + 1}/{max_rounds}...")
+
+        # 更新进度
+        write_progress({"mode": "verify", "status": "running", "phase": "verifying",
+            "max_rounds": max_rounds, "current_round": round_num + 1,
+            "tasks": [{"round": round_num + 1, "phase": "verifying"}]})
 
         verify_prompt = f"""[Verification Rubric]
 {rubric}
@@ -1276,6 +1487,7 @@ Fix the issues above and produce corrected output."""
     print(f"✅ Adversarial verification 完成")
     print(f"{'='*60}")
     print(current_output)
+    clear_progress()
 
 
 # ── Pattern 4: Generate-and-filter ─────────────────────────────
@@ -1534,6 +1746,10 @@ def cmd_loop_until(task_prompt: str, stop_condition: str, max_iterations: int = 
     print(f"🔁 Loop until done: 最多 {max_iterations} 轮")
     print(f"   停止条件: {stop_condition[:80]}...")
 
+    # 写入初始进度
+    write_progress({"mode": "loop_until", "status": "running", "max_iterations": max_iterations,
+        "current_iteration": start_iter, "stop_condition": stop_condition[:80], "tasks": []})
+
     state = load_state()
     saved_iter = state.get("loop_until_iter", 0)
     saved_session = state.get("session_id")
@@ -1598,6 +1814,10 @@ Has the stop condition been met? Output ONLY: MET or NOT_MET, followed by a brie
             total_turns = sum(h.get("num_turns", 0) for h in saved_history)
             print(f"\n🎉 Loop until done 完成！")
             print(f"   总轮次: {iteration} | 累计: {total_turns} 轮, ${total_cost:.4f}")
+            write_progress({"mode": "loop_until", "status": "done", "max_iterations": max_iterations,
+                "current_iteration": iteration, "cost_usd": total_cost,
+                "tasks": [{"iter": h["iter"], "status": "done"} for h in saved_history]})
+            clear_progress()
             save_state({"session_id": None, "loop_until_iter": 0, "loop_until_history": []})
             print(f"\n{'='*60}")
             print(output)
@@ -1617,6 +1837,12 @@ Has the stop condition been met? Output ONLY: MET or NOT_MET, followed by a brie
             "loop_until_iter": iteration,
             "loop_until_history": saved_history,
         })
+
+        # 更新进度
+        write_progress({"mode": "loop_until", "status": "running", "max_iterations": max_iterations,
+            "current_iteration": iteration,
+            "cost_usd": sum(h.get("cost_usd", 0) for h in saved_history),
+            "tasks": [{"iter": h["iter"], "status": "done", "outcome": h.get("outcome", "")[:60]} for h in saved_history]})
 
     print(f"\n⚠️ 达到最大轮数 {max_iterations}，停止条件仍未满足")
     total_cost = sum(h.get("cost_usd", 0) for h in saved_history)

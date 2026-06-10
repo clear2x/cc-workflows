@@ -419,6 +419,7 @@ commands:
   parallel --task "X" --agent Y --name Z [...]   Parallel fan-out
   loop <prompt> [--max-steps N] [--agent X] [--interactive]   Segmented loop
   sessions                             Inspect sessions
+  progress                             Check progress of running task
 
   classify <prompt> [--class-KEY "action"] [--default "action"]   Classify-and-act
   fanout <prompt> [--subtask "X"] [--synthesize "Y"] [--agent Z]   Fan-out-and-synthesize
@@ -436,6 +437,43 @@ global (auto-injected):
 
 
 ## Advanced Features
+
+### Progress Feedback During Execution
+
+CC Workflows automatically writes structured progress to `/tmp/cc-workflows-progress.json` after each step. This enables **real-time progress reporting** in Claude Code conversations.
+
+**How it works:**
+
+- **Short tasks** (< 12 rounds): Execute in foreground — Claude shows results when done.
+- **Long tasks** (> 12 rounds, or parallel/loop/verify modes): Claude runs the command in background, then periodically polls the progress file and reports to you.
+
+```
+💬 在 Claude Code 中：
+> /cc-workflows parallel 并行分析这 3 个文件
+
+Claude: 好的，后台执行中，我会定期汇报进度。
+
+[30秒后 Claude 自动汇报]
+📊 进度：
+  ✅ [auth] 完成, 4 turns, $0.02
+  🔄 [api] 执行中...
+  🔄 [db] 执行中...
+
+[60秒后]
+📊 全部完成：
+  ✅ [auth] 4 turns, $0.02
+  ✅ [api] 3 turns, $0.02
+  ✅ [db] 5 turns, $0.03
+  💰 总计: $0.07
+```
+
+To check progress manually:
+
+```
+💬 > /cc-workflows progress
+```
+
+Supported modes: `loop`, `parallel`, `pipeline`, `verify`, `loop_until`. The progress file is automatically cleaned up when the task completes.
 
 ### Automatic Project Root Detection
 

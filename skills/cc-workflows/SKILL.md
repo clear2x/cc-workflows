@@ -233,6 +233,79 @@ python3 ~/.claude/skills/cc-workflows/cc_workflows.py loop_until "修复所有�
 9. **result.result 可能为空**：见 `references/output-parsing.md`
 10. **pipeline step 计数**：脚本里 step 序号从 1 开始，`--step` 定义数和实际执行数要对应，避免 off-by-one
 11. **loop 重开逻辑**：如果上次循环以 `end_turn` 结束（任务完成），再次调用 `loop` 会全新开始，不会续接旧会话
+12. **进度反馈**：所有模式（loop/parallel/pipeline/verify/loop_until）每步完成后自动写入 `/tmp/cc-workflows-progress.json`。任务完成后自动清理。使用 `progress` 命令读取进度。
+
+## 进度反馈机制
+
+cc-workflows 在执行过程中会自动将进度写入 `/tmp/cc-workflows-progress.json`，供 Claude Code 后台轮询读取。
+
+### 执行策略
+
+**短任务（< 12 轮）**：直接在前台执行，无需后台轮询。
+
+**长任务（> 12 轮，或 parallel/loop 等耗时模式）**：
+1. 用 Bash `run_in_background=true` 后台启动 cc-workflows 命令
+2. 用 ScheduleWakeup 每 30-60 秒轮询一次 `python3 cc_workflows.py progress`
+3. 将进度汇报给用户
+4. 任务完成后（后台通知到达），展示最终结果
+
+### Claude 执行指令
+
+当用户触发长任务时，Claude 应按以下流程执行：
+
+```
+1. 告知用户"后台执行中，我会定期汇报进度"
+2. 用 Bash run_in_background=true 启动 cc-workflows 命令
+3. 用 ScheduleWakeup 设 30-60 秒后轮询进度：
+   prompt: "读取 cc-workflows 进度并汇报给用户：python3 ~/.hermes/skills/cc-workflows/cc_workflows.py progress"
+4. 收到后台任务完成通知后，读取输出并展示最终结果
+```
+
+### 进度文件格式
+
+```json
+{
+  "mode": "loop|parallel|pipeline|verify|loop_until",
+  "status": "running|done",
+  "total_steps": 10,
+  "completed_steps": 3,
+  "current_step": 3,
+  "current_step_preview": "读取 auth.py...",
+  "cost_usd": 0.1234,
+  "tasks": [
+    {"step": 1, "status": "done", "turns": 5, "cost_usd": 0.04},
+    {"step": 2, "status": "done", "turns": 3, "cost_usd": 0.03}
+  ],
+  "updated_at": "14:30:25"
+}
+```
+
+### progress 命令输出示例
+
+```
+# 无任务时
+📭 没有正在执行的工作流任务
+
+# loop 执行中
+🔄 loop 执行中 | 更新于 14:30:25
+   进度: 3/10 步 | 💰 $0.1234
+   当前: Step 3 — 读取 auth.py...
+  ✅ Step 1 | 5 turns | $0.0400
+  ✅ Step 2 | 3 turns | $0.0300
+
+# parallel 执行中
+🔄 parallel 执行中 | 更新于 14:31:10
+   进度: 1/3 任务
+  ✅ [auth] 4 turns, $0.0234
+  🔄 [api]
+  🔄 [db]
+
+# 完成
+✅ parallel 已完成 | 💰 $0.0735 | 更新于 14:32:05
+  • [auth] done | 4 turns | $0.0234
+  • [api] done | 3 turns | $0.0189
+  • [db] done | 5 turns | $0.0312
+```
 
 ## 在 Claude Code 中使用
 
