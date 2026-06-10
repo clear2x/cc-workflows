@@ -15,10 +15,7 @@ version: 1.1.0
 脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/cc-workflows/cc_workflows.py`
 脚本路径（Claude Code 用户级）：`~/.claude/skills/cc-workflows/cc_workflows.py`
 脚本路径（项目级）：`.claude/scripts/cc_workflows.py`
-支持文件：`references/output-parsing.md`（JSON 输出解析参考）
-`references/test-project-verify.md`（test_project 全模式验证记录）
-`references/installation.md`（Claude Code 安装状态与修复步骤）
-`references/gen-video-standalone.md`（gen-video 独立编排器的设计决策与调用方式）
+支持文件：`references/output-parsing.md`（JSON 输出解析参考）、`references/api-rate-limit-and-context-overflow.md`（API 限流与上下文溢出应对）、`references/test-project-verify.md`（test_project 全模式验证记录）、`references/test-results-12-modes.md`（12 种模式实测结果与已知问题）、`references/installation.md`（Claude Code 安装状态与修复步骤）、`references/gen-video-standalone.md`（gen-video 独立编排器的设计决策与调用方式）
 
 ## 输出解析注意
 
@@ -271,8 +268,48 @@ Claude 会自动加载 Superpowers 的 `writing-plans`、`subagent-driven-develo
 - 如果 `run` 或 `resume` 报错，先查看错误信息，再决定是否重试
 - 并行模式下最多 8 个并发 worker，超时 310 秒（CLAUDE_TIMEOUT + 10）
 - **`--keep-worktree`**：parallel 模式下加此参数，worktree 执行完后**跳过合并和清理**，改动保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>`。**不加此参数时，默认会自动合并并清理**
-- **默认自动合并**：parallel 任务执行完后自动 `git merge --no-edit` 合并回当前分支。合并成功则清理 worktree；合并冲突则保留 worktree 并打印手动解决命令
+- **默认自动合并**：parallel 任务执行完后自动 `git merge --no-edit` 合并到当前分支。合并成功则清理 worktree；合并冲突则保留 worktree 并打印手动解决命令
 - `--dangerously-skip-permissions` 已内置，无需额外传递
+
+## 脚本路径配置
+
+脚本通过以下顺序解析 `claude` 实际路径：
+
+1. 环境变量 `CC_CLAUDE_CMD`（优先级最高）
+2. 默认 fallback：`~/.local/bin/claude`
+
+如果 `claude` 不在 PATH 中，运行时显式指定：
+
+```bash
+CC_CLAUDE_CMD=/Users/clear2x/.local/bin/claude \
+  python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
+```
+
+`agents` 和 `sessions` 子命令走的是 `claude agents --json`（不走 `-p`），即使 API 暂时不可用也可能正常工作，可用它们快速验证脚本连通性。
+
+## 长任务与上下文管理
+
+长任务（超过 20 段）推荐策略：
+
+- **低轮次 + 多分段**：每段 `--max-turns 6~8`，靠 `--max-steps` 增加总段数。上下文清空靠 `--resume` 的 session 机制，不要靠单段塞大量内容。
+- **后台运行**：在 Claude Code 里用 `background=true` + `notify_on_complete=true` 跑 loop，长任务不占前台。
+- **Python 调用时设 unbuffered**：如果从 Python subprocess 调用 cc_workflows.py，设 `PYTHONUNBUFFERED=1` 或 `python3 -u`，否则实时输出被缓冲，看不到进度。
+- **避免单段 prompt 过长**：loop 每段 prompt 控制在 2000 字以内；如果任务描述本身很长，拆成更多段而不是塞进一段。
+
+## Unicode 与输出解析陷阱
+
+- **subprocess 不要用 `text=True`**：长输出可能触发 `UnicodeDecodeError: 'utf-8' codec can't decode bytes`。改用 `capture_output=True` + 手动 `decode('utf-8', errors='replace')`。
+- **`_parse_claude_output` 要传入 str**：确保传入的是解码后的 str，不要传 bytes。
+- **classify 分类匹配不够健壮**：classifier 经常返回解释性长文本（"你目前没有描述具体的 bug 详情..."），而不是关键词。当前 `key.lower() in classification` 会误匹配。建议：在 classify prompt 里明确要求 "Reply with exactly one word: <key1>, <key2>, or <key3>"，或者改匹配逻辑为取输出前几个 token 匹配。
+- **`result.result` 为空是正常的**：parser 会自动回退到 `assistant` 事件的 text 块，不要因为 `result.result == ""` 就认为执行失败。
+
+## API 限流与超时处理
+
+如果 `claude -p` 调用持续超时（300s）且不返回错误，可能是 API 限流（尤其自定义 endpoint 的 `rate_limit_error`）。此时：
+
+1. 用 `claude --version` 和 `claude -p "echo ok" --max-turns 1 --dangerously-skip-permissions` 快速确认是网络问题还是脚本问题
+2. 如果 API 返回 `rate_limit_error`，所有后续 `claude -p` 调用都会 hang 到超时，不是脚本 bug
+3. 等限额恢复后重试；长任务建议分段跑，每段独立，避免一次性挂住太久
 
 ## 已知修复记录
 

@@ -50,14 +50,20 @@ CC Workflows 是一个**生产级**的 Python 封装，底层调用 `claude -p`�
 
 ### 12 种执行模式一览
 
-| 模式 | 说明 |
-|------|------|
-| `run` | 单 agent 执行，自动续接 |
-| `pipeline` | 顺序多 agent 流水线 |
-| `branch` | 条件分支流水线 |
-| `parallel` | 并行派发，带 git worktree 隔离 |
-| `loop` | 长任务分段循环，支持断点续接 |
-| `sessions` | 查看活跃 Claude 会话 |
+| 模式 | 类型 | 说明 |
+|------|------|------|
+| `run` | CLI 原语 | 单 agent 执行，自动续接 |
+| `pipeline` | CLI 原语 | 顺序多 agent 流水线 |
+| `branch` | CLI 原语 | 条件分支流水线 |
+| `parallel` | CLI 原语 | 并行派发，带 git worktree 隔离 |
+| `loop` | CLI 原语 | 长任务分段循环，支持断点续接 |
+| `sessions` | CLI 原语 | 查看活跃 Claude 会话 |
+| `classify` | Workflow Pattern | 分类路由（Classify-and-act） |
+| `fanout` | Workflow Pattern | 扇出聚合（Fan-out-and-synthesize） |
+| `verify` | Workflow Pattern | 对抗验证（Adversarial verification） |
+| `genfilter` | Workflow Pattern | 生成过滤（Generate-and-filter） |
+| `tournament` | Workflow Pattern | 锦标赛（Tournament） |
+| `loop_until` | Workflow Pattern | 条件循环（Loop until done） |
 
 ### 快速开始
 
@@ -72,12 +78,12 @@ npx skills add https://github.com/clear2x/cc-workflows
 python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 
 # 3. 单任务执行
-python3 ~/.hermes/skills/cc-workflows/cc-run/cc_workflows.py run \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run \
   "重构 auth.py，添加类型提示" \
   --agent general-purpose
 
 # 4. 长任务分段执行（自动断点续接）
-python3 ~/.hermes/skills/cc-workflows/cc-loop/cc_workflows.py loop \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop \
   "第 1 步: 列出 src/ 下所有 .py 文件
 第 2 步: 读取 auth.py 并总结结构
 第 3 步: 读取 api.py 并总结结构

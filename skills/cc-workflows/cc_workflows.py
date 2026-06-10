@@ -42,11 +42,21 @@ import sys
 import os
 import time
 import re
+import fcntl
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Tuple, List, Dict
 
 # ── 基础工具函数 ──────────────────────────────────────
+def _safe_int(val: str, name: str = "参数", default: int = 0) -> int:
+    """安全的 int 转换，失败时给出友好错误"""
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        print(f"⚠️ {name} 应为整数，收到 '{val}'，使用默认值 {default}")
+        return default
+
+
 def _detect_project_dir() -> Path:
     """自动检测 git root，失败则回退到当前目录"""
     try:
@@ -100,23 +110,37 @@ def run_claude(
     env.pop("CLAUDE_CODE_AUTO_COMPACT", None)
 
     run_cwd = cwd or str(PROJECT_DIR)
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=CLAUDE_TIMEOUT,
-        cwd=run_cwd,
-        env=env,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT,
+            cwd=run_cwd,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "error": True,
+            "stderr": f"claude 命令超时 ({CLAUDE_TIMEOUT}s)",
+            "stdout": "",
+        }
 
-    if result.returncode != 0:
+    # Parse output FIRST, regardless of return code.
+    # claude -p returns non-zero for max_turns, permission denials, etc.,
+    # but stdout may still contain valid JSON with assistant text blocks.
+    events = _parse_claude_output(result.stdout)
+    last_result = next((e for e in events if isinstance(e, dict) and e.get("type") == "result"), None)
+
+    # If returncode != 0 but we have valid parsed output, treat as soft error
+    # (e.g. max_turns reached — still extract whatever text we got).
+    # Only hard-fail if stdout is empty or completely unparseable.
+    if result.returncode != 0 and not events:
         return {
             "error": True,
             "stderr": result.stderr[:2000],
             "stdout": result.stdout[:500],
         }
-
-    events = _parse_claude_output(result.stdout)
     last_result = next((e for e in events if isinstance(e, dict) and e.get("type") == "result"), None)
 
     output = ""
@@ -144,7 +168,8 @@ def run_claude(
         return {"error": True, "stderr": "未找到 result 事件或 assistant 文本", "stdout": result.stdout[:500]}
 
     return {
-        "error": False,
+        "error": result.returncode != 0,  # True for max_turns etc, but we still return output
+        "soft_error": result.returncode != 0 and last_result and last_result.get("subtype") in ("error_max_turns",),
         "session_id": (last_result or {}).get("session_id"),
         "stop_reason": (last_result or {}).get("stop_reason"),
         "num_turns": (last_result or {}).get("num_turns", 0),
@@ -182,18 +207,29 @@ def _parse_claude_output(stdout: str):
 
 # ── 状态管理 ──────────────────────────────────────────
 def load_state() -> dict:
-    if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
-    return {}
+    if not STATE_FILE.exists():
+        return {}
+    try:
+        with open(STATE_FILE, "r") as f:
+            fcntl.flock(f, fcntl.LOCK_SH)  # 共享锁（读）
+            data = json.loads(f.read())
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return data
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 def save_state(state: dict):
-    STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+    with open(STATE_FILE, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)  # 排他锁（写）
+        json.dump(state, f, indent=2, ensure_ascii=False)
+        f.flush()
+        fcntl.flock(f, fcntl.LOCK_UN)
 
 
 # ── 模式 1: 查看可用 agent ───────────────────────────
 def cmd_agents():
-    """列出所有可用 agent（从 system init 事件读取，不依赖模型输出）"""
+    """列出所有可用 agent（尝试多种方式获取，优先 system init，回退预设列表）"""
     cmd = [
         "claude", "-p", "echo ready",
         "--dangerously-skip-permissions",
@@ -202,19 +238,32 @@ def cmd_agents():
     ]
     env = os.environ.copy()
     env.pop("CLAUDE_CODE_AUTO_COMPACT", None)
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR), env=env,
-    )
-    events = _parse_claude_output(result.stdout)
-    init = next((e for e in events if isinstance(e, dict) and e.get("type") == "system" and e.get("subtype") == "init"), None)
-    if not init:
-        print("❌ 无法读取系统初始化信息")
-        if result.stderr:
-            print(f"   stderr: {result.stderr[:300]}")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR), env=env,
+        )
+    except subprocess.TimeoutExpired:
+        print("❌ claude 命令超时（30秒）")
         sys.exit(1)
-    agents = init.get("agents", [])
-    print("可用 Agents:")
-    for a in agents:
+
+    events = _parse_claude_output(result.stdout)
+    # 方式1: 从 system init 事件读取（流式 JSON 输出格式）
+    init = next((e for e in events if isinstance(e, dict) and e.get("type") == "system" and e.get("subtype") == "init"), None)
+    if init:
+        agents = init.get("agents", [])
+        if agents:
+            print("可用 Agents:")
+            for a in agents:
+                print(f"  • {a}")
+            return
+
+    # 方式2: 回退到预设 agent 列表（当 output-format json 只返回 result 对象时）
+    known_agents = [
+        "Explore", "Plan", "general-purpose", "claude",
+        "search-agent", "gen-video-qa", "gen-video-reviewer",
+    ]
+    print("可用 Agents（预设列表）:")
+    for a in known_agents:
         print(f"  • {a}")
 
 
@@ -267,28 +316,25 @@ def _print_step_result(step: int, res: dict):
 
 def cmd_pipeline(steps: list):
     """顺序执行多 agent 流水线"""
-    state = load_state()
-    session_id = state.get("session_id")
+    # Pipeline 不继承 run/loop 等其他模式的状态，始终从 step 1 开始
+    first = steps[0]
+    total_steps = len(steps)
+    print(f"🚀 流水线启动: Step 1/{total_steps}")
+    res = run_claude(first["prompt"], agent=first.get("agent"))
+    if res.get("error"):
+        print(f"❌ Step 1 失败: {res.get('stderr', '')[:300]}")
+        sys.exit(1)
+    session_id = res["session_id"]
+    state = {"session_id": session_id, "next_step": 2, "history": [{
+        "step": 1, "agent": first.get("agent"),
+        "stop_reason": res["stop_reason"], "num_turns": res["num_turns"],
+        "cost_usd": res["total_cost_usd"], "output": res["output"][:500],
+    }]}
+    save_state(state)
+    _print_step_result(1, res)
+    remaining = steps[1:]
 
-    if not session_id:
-        first = steps[0]
-        print(f"🚀 流水线启动: Step 1/{len(steps)}")
-        res = run_claude(first["prompt"], agent=first.get("agent"))
-        if res.get("error"):
-            print(f"❌ Step 1 失败: {res.get('stderr', '')[:300]}")
-            sys.exit(1)
-        session_id = res["session_id"]
-        state = {"session_id": session_id, "next_step": 2, "history": [{
-            "step": 1, "agent": first.get("agent"),
-            "stop_reason": res["stop_reason"], "num_turns": res["num_turns"],
-            "cost_usd": res["total_cost_usd"], "output": res["output"][:500],
-        }]}
-        save_state(state)
-        _print_step_result(1, res)
-        steps = steps[1:]
-
-    total_steps = len(steps) + (state.get("next_step", 2) - 1)
-    for i, step_cfg in enumerate(steps, start=state.get("next_step", 2)):
+    for i, step_cfg in enumerate(remaining, start=2):
         print(f"\n🔄 Step {i}/{total_steps}...")
         res = run_claude(step_cfg["prompt"], session_id, agent=step_cfg.get("agent"))
         if res.get("error"):
@@ -356,72 +402,54 @@ def evaluate_condition(condition: str, context: dict) -> bool:
 
 def cmd_branch_pipeline(steps: list, condition: str, then_step_idx: int, else_step_idx: int):
     """带条件分支的流水线"""
-    state = load_state()
-    session_id = state.get("session_id")
+    # Branch 不继承其他模式的状态，始终从头开始
     executed = set()
+    total_steps = len(steps)
 
-    if not session_id:
-        first = steps[0]
-        print(f"🚀 分支流水线启动: Step 1/{len(steps)}")
-        res = run_claude(first["prompt"], agent=first.get("agent"))
-        if res.get("error"):
-            print(f"❌ Step 1 失败: {res.get('stderr', '')[:300]}")
-            sys.exit(1)
-        session_id = res["session_id"]
-        context = {"last_output": res["output"], "last_turns": res["num_turns"]}
-        state = {"session_id": session_id, "next_step": 1, "history": [], "context": context}
-        save_state(state)
-        _print_step_result(1, res)
-        executed.add(0)
-        step_idx = 1
-    else:
-        context = state.get("context", {})
-        step_idx = state.get("next_step", 0)
+    # 执行第一个 step（通常是扫描/收集步骤）
+    first = steps[0]
+    print(f"🚀 分支流水线启动: Step 1/{total_steps}")
+    res = run_claude(first["prompt"], agent=first.get("agent"))
+    if res.get("error"):
+        print(f"❌ Step 1 失败: {res.get('stderr', '')[:300]}")
+        sys.exit(1)
+    session_id = res["session_id"]
+    context = {"last_output": res["output"], "last_turns": res["num_turns"]}
+    _print_step_result(1, res)
+    executed.add(0)
 
-    cond_step_idx = next((i for i, s in enumerate(steps) if "condition" in s), None)
+    # 第一个 step 执行完后立即评估条件
+    cond_result = evaluate_condition(condition, context)
+    print(f"\n🔀 条件评估: '{condition}' → {'TRUE' if cond_result else 'FALSE'}")
 
-    while step_idx < len(steps):
-        step_cfg = steps[step_idx]
-        current_step_num = step_idx + 1
+    # 根据条件决定执行路径
+    target_idx = then_step_idx if cond_result else else_step_idx
+    skip_idx = else_step_idx if cond_result else then_step_idx
 
-        print(f"\n🔄 Step {current_step_num}/{len(steps)}...")
+    if skip_idx < total_steps:
+        print(f"   → 跳过 Step {skip_idx + 1}，执行 Step {target_idx + 1}")
+
+    # 执行条件选中的 step
+    if target_idx < total_steps and target_idx != 0:
+        step_cfg = steps[target_idx]
+        current_step_num = target_idx + 1
+        print(f"\n🔄 Step {current_step_num}/{total_steps}...")
         res = run_claude(step_cfg["prompt"], session_id, agent=step_cfg.get("agent"))
         if res.get("error"):
             print(f"❌ Step {current_step_num} 失败")
             sys.exit(1)
 
         session_id = res["session_id"]
-        context["last_output"] = res["output"]
-        context["last_turns"] = res["num_turns"]
-        executed.add(step_idx)
-
-        state["session_id"] = session_id
-        state["context"] = context
-        state["history"].append({
-            "step": current_step_num, "agent": step_cfg.get("agent"),
-            "stop_reason": res["stop_reason"], "num_turns": res["num_turns"],
-            "cost_usd": res["total_cost_usd"],
-        })
-        save_state(state)
         _print_step_result(current_step_num, res)
-
-        if step_idx == cond_step_idx:
-            cond_result = evaluate_condition(condition, context)
-            print(f"\n🔀 条件评估: '{condition}' → {'TRUE' if cond_result else 'FALSE'}")
-            next_idx = then_step_idx if cond_result else else_step_idx
-            if next_idx in executed:
-                print(f"⚠️ Step {next_idx + 1} 已执行过，跳到下一步")
-                next_idx += 1
-            step_idx = next_idx
-        else:
-            step_idx += 1
 
     print(f"\n🎉 分支流水线完成！")
 
 
 # ── 模式 5: 并行派发 ──────────────────────────────────
-def _run_single_task(task_cfg: dict, worktree_base: Optional[str] = None) -> dict:
-    """单个并行任务"""
+def _run_in_worktree(task_cfg: dict, worktree_base: Optional[str] = None,
+                     prefix: str = "orchestrator", max_output: int = 2000) -> dict:
+    """在独立 worktree 中执行单个任务（parallel/fanout/genfilter/tournament 共用）
+    注意：不再在 finally 里 merge，merge 由主线程的 _merge_and_cleanup 统一处理"""
     name = task_cfg.get("name", "unnamed")
     prompt = task_cfg["prompt"]
     agent = task_cfg.get("agent")
@@ -429,20 +457,22 @@ def _run_single_task(task_cfg: dict, worktree_base: Optional[str] = None) -> dic
     use_worktree = task_cfg.get("worktree", True)
 
     worktree_path = None
+    branch_name = f"{prefix}-{name}"
+    res = None  # 预初始化，确保 finally 可访问
     try:
         if use_worktree and worktree_base:
-            worktree_path = Path(worktree_base) / f"orchestrator-{name}"
-            branch_name = f"orchestrator-{name}"
+            worktree_path = Path(worktree_base) / branch_name
 
+            # 清理残留 worktree 和分支
             if worktree_path.exists():
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(worktree_path)],
                     capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
                 )
-                subprocess.run(
-                    ["git", "branch", "-D", branch_name],
-                    capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
-                )
+            subprocess.run(
+                ["git", "branch", "-D", branch_name],
+                capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
+            )
 
             worktree_path.mkdir(parents=True, exist_ok=True)
             rc = subprocess.run(
@@ -463,49 +493,99 @@ def _run_single_task(task_cfg: dict, worktree_base: Optional[str] = None) -> dic
 
         return {
             "name": name, "error": False,
-            "session_id": res["session_id"],
-            "output": res["output"][:1000],
+            "session_id": res.get("session_id"),
+            "output": res["output"][:max_output],
             "num_turns": res["num_turns"],
             "cost_usd": res["total_cost_usd"],
             "worktree": str(worktree_path) if worktree_path else None,
+            "branch_name": branch_name,
         }
     finally:
-        keep = task_cfg.get("keep_worktree", False)
-        merged = False
-
-        if worktree_path and worktree_path.exists() and not keep:
-            branch_name = f"orchestrator-{name}"
-            merge_result = subprocess.run(
-                ["git", "merge", "--no-edit", branch_name],
-                capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
+        # 只清理失败任务的 worktree（成功任务的 merge 由主线程 _merge_and_cleanup 处理）
+        if res is not None and res.get("error") and worktree_path and worktree_path.exists():
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(worktree_path)],
+                capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
             )
-            if merge_result.returncode == 0:
-                print(f"  🔗 [{name}] 已合并到当前分支")
-                merged = True
-            else:
-                print(f"  ⚠️ [{name}] 合并冲突，worktree 保留: {worktree_path}")
-                print(f"     解决冲突后手动合并: cd {PROJECT_DIR} && git merge --no-edit {branch_name}")
-                keep = True
-                merged = True
+            subprocess.run(
+                ["git", "branch", "-D", branch_name],
+                capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
+            )
+            print(f"  🧹 [{name}] 失败任务 worktree 已清理")
 
-        if worktree_path and worktree_path.exists() and not keep and not merged:
+
+def _merge_and_cleanup(results: list, prefix: str, keep_all: bool = False) -> None:
+    """在主线程中顺序合并所有成功任务的 worktree 分支并清理。
+    必须在所有 future 完成后调用，避免 git index.lock 竞争。
+
+    Args:
+        results: _run_in_worktree 返回的结果列表
+        prefix: 分支名前缀 ("orchestrator" 或 "fanout")
+        keep_all: True 则跳过所有 merge 和 cleanup (--keep-worktree 模式)
+    """
+    if keep_all:
+        for r in results:
+            if r.get("worktree") and Path(r["worktree"]).exists():
+                print(f"  📦 [{r['name']}] worktree 已保留: {r['worktree']}")
+        return
+
+    # 一次性检测 detached HEAD
+    head_check = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "HEAD"],
+        capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
+    )
+    is_detached = head_check.returncode != 0
+
+    if is_detached:
+        print("  ⚠️ detached HEAD 检测到，跳过所有合并")
+        for r in results:
+            if r.get("worktree") and not r.get("error") and Path(r["worktree"]).exists():
+                print(f"  📦 [{r['name']}] worktree 保留 (detached HEAD): {r['worktree']}")
+        return
+
+    # 顺序合并每个成功任务的分支
+    for r in results:
+        if r.get("error") or not r.get("worktree") or not r.get("branch_name"):
+            continue
+
+        name = r["name"]
+        branch_name = r["branch_name"]
+        worktree_path = Path(r["worktree"])
+
+        if not worktree_path.exists():
+            continue
+
+        merge_result = subprocess.run(
+            ["git", "merge", "--no-edit", branch_name],
+            capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
+        )
+
+        if merge_result.returncode == 0:
+            print(f"  🔗 [{name}] 已合并到当前分支")
+            # 合并成功 → 清理 worktree 和分支
             subprocess.run(
                 ["git", "worktree", "remove", str(worktree_path)],
                 capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
             )
+            subprocess.run(
+                ["git", "branch", "-d", branch_name],
+                capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
+            )
             print(f"  🧹 [{name}] worktree 已清理")
-        elif worktree_path and worktree_path.exists() and keep and not merged:
-            print(f"  📦 [{name}] worktree 已保留: {worktree_path}")
+        else:
+            print(f"  ⚠️ [{name}] 合并冲突，worktree 保留: {worktree_path}")
+            print(f"     手动解决: cd {PROJECT_DIR} && git merge --no-edit {branch_name}")
 
 
 def cmd_parallel(tasks: list):
     """并行执行多个任务"""
     print(f"🔄 并行执行 {len(tasks)} 个任务...")
+    keep_all = any(t.get("keep_worktree", False) for t in tasks)
 
     results = []
     WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=max(1, min(len(tasks), 8))) as executor:
-        futures = {executor.submit(_run_single_task, t, str(WORKTREE_BASE)): t for t in tasks}
+        futures = {executor.submit(_run_in_worktree, t, str(WORKTREE_BASE), "orchestrator", 1000): t for t in tasks}
         for future in as_completed(futures):
             try:
                 result = future.result(timeout=CLAUDE_TIMEOUT + 10)
@@ -517,6 +597,9 @@ def cmd_parallel(tasks: list):
                     "error": True,
                     "stderr": f"执行异常: {str(ex)[:200]}",
                 })
+
+    # 主线程顺序合并 worktree 分支（避免 index.lock 竞争）
+    _merge_and_cleanup(results, "orchestrator", keep_all=keep_all)
 
     print(f"\n{'='*60}")
     print("📊 并行结果:")
@@ -735,7 +818,12 @@ def cmd_sessions():
         print(f"❌ 获取会话列表失败: {result.stderr[:300]}")
         sys.exit(1)
 
-    sessions = json.loads(result.stdout)
+    try:
+        sessions = json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        print(f"❌ 无法解析会话列表输出")
+        print(f"   stdout: {result.stdout[:300]}")
+        sessions = []
     if not sessions:
         print("📭 没有活跃的后台会话")
         return
@@ -908,10 +996,10 @@ def _parse_pipeline_args(args: list) -> tuple:
             current_step["condition"] = args[i + 1]
             i += 2
         elif args[i] == "--then-step" and i + 1 < len(args):
-            current_step["then"] = int(args[i + 1])
+            current_step["then"] = _safe_int(args[i + 1], "--then-step")
             i += 2
         elif args[i] == "--else-step" and i + 1 < len(args):
-            current_step["else"] = int(args[i + 1])
+            current_step["else"] = _safe_int(args[i + 1], "--else-step")
             i += 2
         else:
             i += 1
@@ -970,7 +1058,7 @@ def _parse_loop_args(args: list) -> tuple:
     i = 0
     while i < len(args):
         if args[i] == "--max-steps" and i + 1 < len(args):
-            max_steps = int(args[i + 1])
+            max_steps = _safe_int(args[i + 1], "--max-steps", MAX_STEPS)
             i += 2
         elif args[i] == "--agent" and i + 1 < len(args):
             agent = args[i + 1]
@@ -1026,10 +1114,14 @@ def cmd_classify(classify_prompt: str, actions: dict, default_action: str = ""):
         sys.exit(1)
 
     print(f"\n🔄 执行 action...")
-    act_res = run_claude(action_prompt, agent="general-purpose", max_turns=12)
+    act_res = run_claude(action_prompt, agent="general-purpose", max_turns=6)
     if act_res.get("error"):
-        print(f"❌ Action 执行失败: {act_res.get('stderr', '')[:300]}")
-        sys.exit(1)
+        # 如果 action 超时或失败，尝试降级到 Explore agent
+        print(f"⚠️ Action 执行失败，降级到 Explore agent 重试...")
+        act_res = run_claude(action_prompt, agent="Explore", max_turns=6)
+        if act_res.get("error"):
+            print(f"❌ Action 执行失败: {act_res.get('stderr', '')[:300]}")
+            sys.exit(1)
 
     print(f"\n{'='*60}")
     print(f"✅ Classify-and-act 完成")
@@ -1038,81 +1130,6 @@ def cmd_classify(classify_prompt: str, actions: dict, default_action: str = ""):
 
 
 # ── Pattern 2: Fan-out-and-synthesize ──────────────────────────
-def _fanout_subtask(task_cfg: dict, worktree_base: str) -> dict:
-    """单个 fan-out 子任务（带 worktree 隔离）"""
-    name = task_cfg.get("name", "unnamed")
-    prompt = task_cfg["prompt"]
-    agent = task_cfg.get("agent")
-    model = task_cfg.get("model")
-    use_worktree = task_cfg.get("worktree", True)
-
-    worktree_path = None
-    try:
-        if use_worktree and worktree_base:
-            worktree_path = Path(worktree_base) / f"fanout-{name}"
-            branch_name = f"fanout-{name}"
-            if worktree_path.exists():
-                subprocess.run(
-                    ["git", "worktree", "remove", "--force", str(worktree_path)],
-                    capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
-                )
-                subprocess.run(
-                    ["git", "branch", "-D", branch_name],
-                    capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
-                )
-            worktree_path.mkdir(parents=True, exist_ok=True)
-            rc = subprocess.run(
-                ["git", "worktree", "add", "-b", branch_name, str(worktree_path), "HEAD"],
-                capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
-            )
-            if rc.returncode == 0:
-                print(f"  🌳 [{name}] worktree: {worktree_path}")
-            else:
-                print(f"  ⚠️ [{name}] worktree 失败，回退共享目录")
-                worktree_path = None
-
-        work_dir = str(worktree_path) if worktree_path else str(PROJECT_DIR)
-        print(f"  🚀 [{name}] 启动...")
-        res = run_claude(prompt, agent=agent, model=model, cwd=work_dir)
-        if res.get("error"):
-            return {"name": name, "error": True, "stderr": res.get("stderr", "")[:300]}
-
-        return {
-            "name": name, "error": False,
-            "output": res["output"][:2000],
-            "num_turns": res["num_turns"],
-            "cost_usd": res["total_cost_usd"],
-            "worktree": str(worktree_path) if worktree_path else None,
-        }
-    finally:
-        keep = task_cfg.get("keep_worktree", False)
-        if worktree_path and worktree_path.exists() and not keep:
-            branch_name = f"fanout-{name}"
-            # 检查当前分支是否可安全合并（detached HEAD 跳过）
-            head_check = subprocess.run(
-                ["git", "symbolic-ref", "--quiet", "HEAD"],
-                capture_output=True, text=True, timeout=10, cwd=str(PROJECT_DIR),
-            )
-            if head_check.returncode == 0:
-                merge_result = subprocess.run(
-                    ["git", "merge", "--no-edit", branch_name],
-                    capture_output=True, text=True, timeout=30, cwd=str(PROJECT_DIR),
-                )
-                if merge_result.returncode == 0:
-                    print(f"  🔗 [{name}] 已合并")
-                else:
-                    print(f"  ⚠️ [{name}] 合并冲突，保留 worktree ({merge_result.stderr[:80]})")
-                    keep = True
-            else:
-                print(f"  ⚠️ [{name}] detached HEAD，跳过 merge")
-                keep = True
-        if worktree_path and worktree_path.exists() and not keep:
-            subprocess.run(
-                ["git", "worktree", "remove", str(worktree_path)],
-                capture_output=True, text=True, timeout=15, cwd=str(PROJECT_DIR),
-            )
-            print(f"  🧹 [{name}] worktree 已清理")
-
 
 def cmd_fanout(main_prompt: str, subtasks: list, synthesize_prompt: str = "", agent: Optional[str] = None):
     """
@@ -1126,7 +1143,7 @@ def cmd_fanout(main_prompt: str, subtasks: list, synthesize_prompt: str = "", ag
     fanout_results = []
     with ThreadPoolExecutor(max_workers=max(1, min(len(subtasks), 8))) as executor:
         futures = {
-            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            executor.submit(_run_in_worktree, t, str(WORKTREE_BASE), "fanout", 2000): t
             for t in subtasks
         }
         for future in as_completed(futures):
@@ -1139,6 +1156,9 @@ def cmd_fanout(main_prompt: str, subtasks: list, synthesize_prompt: str = "", ag
                     "name": task.get("name", "unnamed"),
                     "error": True, "stderr": f"执行异常: {str(ex)[:200]}",
                 })
+
+    # 主线程顺序合并 worktree 分支
+    _merge_and_cleanup(fanout_results, "fanout")
 
     # 构建汇总上下文
     context_parts = ["[Fan-out 结果汇总]\n"]
@@ -1222,9 +1242,11 @@ Evaluate the output against the rubric. Output ONLY:
             break
 
         verdict_text = verify_res["output"].strip()
+        # 去掉 markdown 格式（**PASS** → PASS）再检测
+        verdict_clean = re.sub(r'[*_`#]', '', verdict_text).strip()
         print(f"   验证结果: {verdict_text[:200]}")
 
-        if verdict_text.upper().startswith("PASS"):
+        if verdict_clean.upper().startswith("PASS"):
             print(f"\n✅ 验证通过！")
             break
 
@@ -1282,7 +1304,7 @@ Produce a complete, independent solution. Be creative and thorough."""
     gen_results = []
     with ThreadPoolExecutor(max_workers=max(1, min(count, 8))) as executor:
         futures = {
-            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            executor.submit(_run_in_worktree, t, str(WORKTREE_BASE), "fanout", 2000): t
             for t in generation_tasks
         }
         for future in as_completed(futures):
@@ -1295,6 +1317,9 @@ Produce a complete, independent solution. Be creative and thorough."""
                     "name": task.get("name", "unnamed"),
                     "error": True, "stderr": f"异常: {str(ex)[:200]}",
                 })
+
+    # 主线程顺序合并 worktree 分支
+    _merge_and_cleanup(gen_results, "fanout")
 
     successful_gens = [r for r in gen_results if not r.get("error")]
     if not successful_gens:
@@ -1399,7 +1424,7 @@ Produce your best complete solution following your approach. Be thorough."""
     contest_results = []
     with ThreadPoolExecutor(max_workers=max(1, min(contestants, 8))) as executor:
         futures = {
-            executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
+            executor.submit(_run_in_worktree, t, str(WORKTREE_BASE), "fanout", 2000): t
             for t in contest_tasks
         }
         for future in as_completed(futures):
@@ -1412,6 +1437,9 @@ Produce your best complete solution following your approach. Be thorough."""
                     "name": task.get("name", "unnamed"),
                     "error": True, "stderr": f"异常: {str(ex)[:200]}",
                 })
+
+    # 主线程顺序合并 worktree 分支
+    _merge_and_cleanup(contest_results, "fanout")
 
     successful = [r for r in contest_results if not r.get("error")]
     if len(successful) < 2:
@@ -1559,8 +1587,10 @@ def cmd_loop_until(task_prompt: str, stop_condition: str, max_iterations: int = 
 Has the stop condition been met? Output ONLY: MET or NOT_MET, followed by a brief reason."""
         check_res = run_claude(check_prompt, agent="Explore", max_turns=3)
         check_output = check_res.get("output", "").strip() if not check_res.get("error") else ""
+        # 去掉 markdown 格式（**MET** → MET）再检测
+        check_clean = re.sub(r'[*_`#]', '', check_output).strip()
 
-        if check_output.upper().startswith("MET"):
+        if check_clean.upper().startswith("MET"):
             outcome = "MET"
             print(f"   ✅ 停止条件已满足: {check_output[:120]}")
             saved_history.append({"iter": iteration, "outcome": outcome, "output_preview": output[:200]})
@@ -1685,7 +1715,7 @@ def _parse_verify_args(args: list) -> tuple:
             verifier_agent = args[i + 1]
             i += 2
         elif args[i] == "--max-rounds" and i + 1 < len(args):
-            max_rounds = int(args[i + 1])
+            max_rounds = _safe_int(args[i + 1], "--max-rounds", 2)
             i += 2
         elif not args[i].startswith("--") and not task_prompt:
             task_prompt = args[i]
@@ -1709,7 +1739,7 @@ def _parse_genfilter_args(args: list) -> tuple:
     i = 0
     while i < len(args):
         if args[i] == "--count" and i + 1 < len(args):
-            count = int(args[i + 1])
+            count = _safe_int(args[i + 1], "--count", 3)
             i += 2
         elif args[i] == "--rubric" and i + 1 < len(args):
             rubric = args[i + 1]
@@ -1718,7 +1748,7 @@ def _parse_genfilter_args(args: list) -> tuple:
             filter_prompt = args[i + 1]
             i += 2
         elif args[i] == "--filter-top" and i + 1 < len(args):
-            filter_top = int(args[i + 1])
+            filter_top = _safe_int(args[i + 1], "--filter-top", 1)
             i += 2
         elif args[i] == "--agent" and i + 1 < len(args):
             agent = args[i + 1]
@@ -1744,7 +1774,7 @@ def _parse_tournament_args(args: list) -> tuple:
     i = 0
     while i < len(args):
         if args[i] == "--contestants" and i + 1 < len(args):
-            contestants = int(args[i + 1])
+            contestants = _safe_int(args[i + 1], "--contestants", 3)
             i += 2
         elif args[i] == "--judge" and i + 1 < len(args):
             judge_prompt = args[i + 1]
@@ -1778,7 +1808,7 @@ def _parse_loop_until_args(args: list) -> tuple:
             stop_condition = args[i + 1]
             i += 2
         elif args[i] == "--max-iterations" and i + 1 < len(args):
-            max_iterations = int(args[i + 1])
+            max_iterations = _safe_int(args[i + 1], "--max-iterations", 10)
             i += 2
         elif args[i] == "--agent" and i + 1 < len(args):
             agent = args[i + 1]
