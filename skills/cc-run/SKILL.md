@@ -12,8 +12,8 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "<任务描述>" --agent general-purpose
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "<任务描述>" --agent Explore --model step-3.7-flash
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run "<任务描述>" --agent general-purpose
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run "<任务描述>" --agent Explore --model step-3.7-flash
 ```
 
 ## 常用 agent
@@ -27,5 +27,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "<任务描述>
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "<任务>" --agent <agent名>
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run "<任务>" --agent <agent名>
 ```

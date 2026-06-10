@@ -12,7 +12,7 @@ Loop until done 模式：重复执行任务，直到满足停止条件。
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop_until \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop_until \
   "修复所有 failing tests" \
   --stop-condition "所有测试通过" \
   --max-iterations 10
@@ -30,5 +30,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop_until \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop_until "<任务>" --stop-condition "<条件>" [--agent <agent>] [--max-iterations <N>]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop_until "<任务>" --stop-condition "<条件>" [--agent <agent>] [--max-iterations <N>]
 ```

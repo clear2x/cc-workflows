@@ -12,7 +12,7 @@ Generate-and-filter 模式：生成 N 个独立方案，然后用 rubric 筛选�
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py genfilter \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py genfilter \
   "为这个 CLI 工具想 5 个名字" \
   --count 5 --filter-top 3 \
   --rubric "好记、简短、与工具功能相关"
@@ -28,5 +28,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py genfilter \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py genfilter "<生成任务>" --count <N> --filter-top <K> [--rubric "<筛选标准>"]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py genfilter "<生成任务>" --count <N> --filter-top <K> [--rubric "<筛选标准>"]
 ```

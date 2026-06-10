@@ -12,9 +12,9 @@ version: 1.1.0
 
 本 skill 提供 6 种模式的动态工作流调度，全部基于 `claude -p` 实现。
 
-脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/cc-workflows/claude_orchestrator.py`
-脚本路径（Claude Code 用户级）：`~/.claude/skills/cc-workflows/claude_orchestrator.py`
-脚本路径（项目级）：`.claude/scripts/claude_orchestrator.py`
+脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/cc-workflows/cc_workflows.py`
+脚本路径（Claude Code 用户级）：`~/.claude/skills/cc-workflows/cc_workflows.py`
+脚本路径（项目级）：`.claude/scripts/cc_workflows.py`
 支持文件：`references/output-parsing.md`（JSON 输出解析参考）
 `references/test-project-verify.md`（test_project 全模式验证记录）
 `references/installation.md`（Claude Code 安装状态与修复步骤）
@@ -36,7 +36,7 @@ Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常�
 ### 模式 1: 查看可用 agent
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 ```
 
 从 system init 事件读取，不依赖模型输出，30 秒超时。
@@ -44,8 +44,8 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 ### 模式 2: 单 agent 执行
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "任务描述" --agent Explore
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-flash
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run "任务描述" --agent Explore
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run "任务描述" --agent Plan --model step-3.7-flash
 ```
 
 支持 agent：`Explore`, `Plan`, `general-purpose`, `claude`, `search-agent` 等。
@@ -54,7 +54,7 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "任务描述" 
 ### 模式 3: 多 agent 流水线（顺序执行）
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline \
   --step "探索:列出所有 .py 文件" --agent Explore \
   --step "分析:评估复杂度" --agent general-purpose \
   --step "规划:给出重构方案" --agent Plan
@@ -65,7 +65,7 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
 ### 模式 4: 条件分支
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline \
   --step "扫描:找出所有安全问题" --agent Explore \
   --step "判断:统计高危问题数" --agent general-purpose \
   --step "修复:生成修复方案（满足条件时执行）" --agent general-purpose \
@@ -80,7 +80,7 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
 ### 模式 5: 并行派发
 
 ```bash
-python3 /Users/clear2x/hermes_ws/claude_orchestrator.py parallel \
+python3 /Users/clear2x/hermes_ws/cc_workflows.py parallel \
   --task "分析 src/a.py" --agent Explore --name task_a \
   --task "分析 src/b.py" --agent Explore --name task_b \
   --task "分析 src/c.py" --agent general-purpose --name task_c
@@ -109,16 +109,16 @@ Worktree 实现细节：
 
 ```bash
 # 每行一步，自动分段执行
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: list files
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "Step 1: list files
 Step 2: read calculator.py
 Step 3: read logger.py
 Step 4: report findings"
 
 # 指定最多 50 段
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: ..." --max-steps 50
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "Step 1: ..." --max-steps 50
 
 # 指定 agent
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: ..." --max-steps 100 --agent Explore
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "Step 1: ..." --max-steps 100 --agent Explore
 ```
 
 自动循环行为：
@@ -134,14 +134,14 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: ..." 
 **断点续接示例**：
 ```bash
 # 第一次跑 2 步
-python3 claude_orchestrator.py loop "Step 1: list files
+python3 cc_workflows.py loop "Step 1: list files
 Step 2: read a.py
 Step 3: read b.py
 Step 4: report" --max-steps 2
 # 输出：还剩 2 步未执行
 
 # 第二次继续（无需改 prompt）
-python3 claude_orchestrator.py loop "Step 1: list files
+python3 cc_workflows.py loop "Step 1: list files
 Step 2: read a.py
 Step 3: read b.py
 Step 4: report" --max-steps 2
@@ -151,7 +151,7 @@ Step 4: report" --max-steps 2
 ### 查看会话状态
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py sessions
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py sessions
 ```
 
 ## 关键规则
@@ -200,7 +200,7 @@ Claude Code 用户级路径必须包含 `SKILL.md`：
 ```
 ~/.claude/skills/cc-workflows/
 ├── SKILL.md          ← 必须存在，否则 Claude Code 不会加载此 skill
-└── claude_orchestrator.py
+└── cc_workflows.py
 ```
 
 如果 `~/.claude/skills/cc-workflows/` 下没有 `SKILL.md`，需要手动复制 Hermes 全局版本的 `SKILL.md` 过去。
@@ -209,8 +209,8 @@ Claude Code 用户级路径必须包含 `SKILL.md`：
 
 | 作用域 | 路径 | 说明 |
 |--------|------|------|
-| Hermes 全局 | `/Users/clear2x/.hermes/skills/cc-workflows/claude_orchestrator.py` | Hermes Agent 使用 |
-| Claude Code 用户级 | `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` | Claude Code 自动加载 |
+| Hermes 全局 | `/Users/clear2x/.hermes/skills/cc-workflows/cc_workflows.py` | Hermes Agent 使用 |
+| Claude Code 用户级 | `~/.claude/skills/cc-workflows/cc_workflows.py` + `SKILL.md` | Claude Code 自动加载 |
 | 项目级 | `.claude/skills/cc-workflows/SKILL.md`（文档）+ 脚本软链接 | 项目共享 |
 
 Claude Code 会自动加载 `~/.claude/skills/` 下包含 `SKILL.md` 的技能。
@@ -233,7 +233,7 @@ Superpowers（obra/superpowers）是一套编码代理的开发方法论，包�
 **方案 A：orchestrator 注入 Superpowers 约束到 agent prompt**
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop \
   "重构 src/calculator.py，遵循 TDD：先写失败测试，再写代码，再重构" \
   --max-steps 100 \
   --agent general-purpose
@@ -265,7 +265,7 @@ Claude 会自动加载 Superpowers 的 `writing-plans`、`subagent-driven-develo
 
 ## 注意事项
 
-- 脚本路径：`~/.hermes/skills/cc-workflows/claude_orchestrator.py`
+- 脚本路径：`~/.hermes/skills/cc-workflows/cc_workflows.py`
 - 状态文件：`/tmp/claude_orchestrator_state.json`，重启不丢失
 - 工作目录：自动检测 git root，失败则回退到当前执行目录。**不再硬编码单一项目路径**
 - 如果 `run` 或 `resume` 报错，先查看错误信息，再决定是否重试

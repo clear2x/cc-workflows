@@ -2,14 +2,14 @@
 
 项目路径：`/Users/clear2x/hermes_ws/test_project`
 验证时间：2025-06-09
-脚本版本：claude_orchestrator.py（含 worktree 默认开启 + loop 分段修复）
+脚本版本：cc_workflows.py（含 worktree 默认开启 + loop 分段修复）
 
 ---
 
 ## 模式 1: agents
 
 ```bash
-python3 claude_orchestrator.py agents
+python3 cc_workflows.py agents
 ```
 
 结果：✅ 列出 8 个可用 agent（claude, Explore, gen-video-qa, gen-video-reviewer, general-purpose, Plan, search-agent, statusline-setup）
@@ -19,7 +19,7 @@ python3 claude_orchestrator.py agents
 ## 模式 2: run
 
 ```bash
-python3 claude_orchestrator.py run "Say: MODE2_RUN_OK" --agent Explore
+python3 cc_workflows.py run "Say: MODE2_RUN_OK" --agent Explore
 ```
 
 结果：✅ 单 agent 执行成功，model 正确显示（step-3.5-flash-2603）
@@ -29,7 +29,7 @@ python3 claude_orchestrator.py run "Say: MODE2_RUN_OK" --agent Explore
 ## 模式 3: pipeline
 
 ```bash
-python3 claude_orchestrator.py pipeline \
+python3 cc_workflows.py pipeline \
   --step "List all Python files" --agent Explore \
   --step "Read calculator.py and summarize" --agent Explore \
   --step "Identify bugs" --agent general-purpose
@@ -42,7 +42,7 @@ python3 claude_orchestrator.py pipeline \
 ## 模式 4: branch（条件分支）
 
 ```bash
-python3 claude_orchestrator.py branch \
+python3 cc_workflows.py branch \
   --step "Count HIGH severity bugs. Output: bugs_found = <number>" --agent Explore \
   --step "Report bug count" --agent general-purpose \
   --step "Fix plan (execute if bugs found)" --agent general-purpose \
@@ -59,7 +59,7 @@ python3 claude_orchestrator.py branch \
 ## 模式 5: parallel（默认 worktree）
 
 ```bash
-python3 claude_orchestrator.py parallel \
+python3 cc_workflows.py parallel \
   --task "Analyze calculator.py" --agent Explore --name calc \
   --task "Analyze logger.py" --agent Explore --name logger
 ```
@@ -72,7 +72,7 @@ python3 claude_orchestrator.py parallel \
 
 ```bash
 # 4 步连续执行
-python3 claude_orchestrator.py loop "Step 1: list files
+python3 cc_workflows.py loop "Step 1: list files
 Step 2: read calculator.py
 Step 3: read logger.py
 Step 4: report" --max-steps 4
@@ -82,9 +82,9 @@ Step 4: report" --max-steps 4
 
 ```bash
 # 断点续接测试：先跑 2 步
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 # 再跑 2 步续接
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 ```
 
 结果：✅ 第二次从 Step 3 继续，全部完成

@@ -12,7 +12,7 @@ Classify-and-act 模式：先用 agent 对任务分类，再路由到对应处�
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py classify \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py classify \
   "这个 bug 是 security 还是 performance 问题？" \
   --agent Explore \
   --route-security "修复安全问题" --agent general-purpose \
@@ -30,5 +30,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py classify \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py classify "<分类任务>" --agent <agent> [--route-<类名> "<步骤>" ...]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py classify "<分类任务>" --agent <agent> [--route-<类名> "<步骤>" ...]
 ```

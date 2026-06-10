@@ -12,7 +12,7 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py parallel \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py parallel \
   --task "分析 src/a.py" --agent Explore --name task_a \
   --task "分析 src/b.py" --agent Explore --name task_b \
   --task "分析 src/c.py" --agent general-purpose --name task_c
@@ -33,5 +33,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py parallel \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py parallel --task "<任务>" --agent <agent> --name <名> [--task ...] [--keep-worktree] [--no-worktree]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py parallel --task "<任务>" --agent <agent> --name <名> [--task ...] [--keep-worktree] [--no-worktree]
 ```

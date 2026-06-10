@@ -74,15 +74,15 @@ npx skills add https://github.com/clear2x/cc-workflows
 # npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
 
 # 2. Verify agents available
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 
 # 3. Run a single task
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py run \
   "Refactor auth.py, add type hints" \
   --agent general-purpose
 
 # 4. Long multi-step task (auto-resumes on re-run)
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop \
   "Step 1: list Python files
 Step 2: read calculator.py and summarize
 Step 3: read logger.py and summarize
@@ -138,22 +138,22 @@ python3 install.py
 ```
 
 Copies the script to:
-- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — core script (Hermes Agent)
-- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — core script (Claude Code)
+- `~/.hermes/skills/cc-workflows/cc_workflows.py` — core script (Hermes Agent)
+- `~/.claude/skills/cc-workflows/cc_workflows.py` + `SKILL.md` — core script (Claude Code)
 
 ### Option C: Manual copy
 
 ```bash
 # Claude Code project-level
 mkdir -p .claude/skills/cc-workflows
-cp skills/cc-workflows/claude_orchestrator.py .claude/skills/cc-workflows/
+cp skills/cc-workflows/cc_workflows.py .claude/skills/cc-workflows/
 cp skills/cc-workflows/SKILL.md .claude/skills/cc-workflows/
 ```
 
 ```bash
 # Hermes Agent global
 mkdir -p ~/.hermes/skills/cc-workflows
-cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
+cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 ```
 
 ## 12 Execution Modes
@@ -163,7 +163,7 @@ cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
 List all available Claude Code agents without invoking a model.
 
 ```bash
-python3 claude_orchestrator.py agents
+python3 cc_workflows.py agents
 ```
 
 ```
@@ -180,8 +180,8 @@ python3 claude_orchestrator.py agents
 Execute a single prompt with an optional agent, auto-resuming from the last session on re-run.
 
 ```bash
-python3 claude_orchestrator.py run "任务描述" --agent Explore
-python3 claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-flash
+python3 cc_workflows.py run "任务描述" --agent Explore
+python3 cc_workflows.py run "任务描述" --agent Plan --model step-3.7-flash
 ```
 
 Output includes per-run metadata:
@@ -197,7 +197,7 @@ Output includes per-run metadata:
 Run multiple steps **sequentially**, each step can use a different agent. Session is carried forward automatically.
 
 ```bash
-python3 claude_orchestrator.py pipeline \
+python3 cc_workflows.py pipeline \
   --step "Explore: list all .py files under src/" --agent Explore \
   --step "Analyze: estimate cyclomatic complexity of each file" --agent general-purpose \
   --step "Plan: produce a refactor plan" --agent Plan
@@ -208,7 +208,7 @@ python3 claude_orchestrator.py pipeline \
 Sequential pipeline with **conditional branching**. After a designated evaluation step, the orchestrator jumps to either the `--then-step` or the `--else-step`.
 
 ```bash
-python3 claude_orchestrator.py branch \
+python3 cc_workflows.py branch \
   --step "Scan: count HIGH severity bugs. Output: bugs_found = <number>" --agent Explore \
   --step "Report: summarize findings" --agent general-purpose \
   --step "Fix: produce a fix plan (executed when bugs found)" --agent general-purpose \
@@ -228,7 +228,7 @@ Supported condition syntax:
 Run multiple tasks **concurrently** (up to 8 workers). Each task gets its own session and an isolated **git worktree** under `/tmp/orchestrator-worktrees/orchestrator-<name>`. By default the script **auto-merges** each branch back and cleans the worktree when the task finishes.
 
 ```bash
-python3 claude_orchestrator.py parallel \
+python3 cc_workflows.py parallel \
   --task "Analyze src/auth.py and list security issues" --agent Explore --name auth \
   --task "Analyze src/api.py and list security issues" --agent Explore --name api \
   --task "Analyze src/db.py and list security issues" --agent Explore --name db
@@ -267,7 +267,7 @@ Worktree flags:
 Split a multi-line prompt into independent steps. Execute them one by one, saving state after each step so you can **interrupt and resume**.
 
 ```bash
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "Step 1: list all Python files under src/
 Step 2: read auth.py and summarize its structure
 Step 3: read api.py and summarize its structure
@@ -280,11 +280,11 @@ Breakpoint-resume behaviour:
 
 ```bash
 # First run: only 2 steps allowed
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 # → ⏸️ 本次执行 2 段完成，还剩 2 步未执行
 
 # Second run: same command, resumes from Step 3
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 # → 🔄 从上次中断处继续，还剩 2 步... Step 3 → Step 4
 ```
 
@@ -295,7 +295,7 @@ State is stored at `/tmp/claude_orchestrator_state.json` and survives process re
 Inspect active background Claude sessions and the orchestrator's own tracked state.
 
 ```bash
-python3 claude_orchestrator.py sessions
+python3 cc_workflows.py sessions
 ```
 
 ## 6 Official Workflow Patterns
@@ -307,7 +307,7 @@ Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for
 **Classify-and-act**: Use a classifier agent to decide the task type, then route to different agents/behaviors.
 
 ```bash
-python3 claude_orchestrator.py classify \
+python3 cc_workflows.py classify \
   "Classify this bug report: security vulnerability or performance issue?" \
   --class-security "Run security audit, check CWE patterns, produce severity report" \
   --class-performance "Profile the code, identify bottlenecks, suggest optimizations" \
@@ -325,7 +325,7 @@ How it works:
 **Fan-out-and-synthesize**: Split a task into many smaller steps, run an agent on each, then synthesize results.
 
 ```bash
-python3 claude_orchestrator.py fanout \
+python3 cc_workflows.py fanout \
   "Analyze the codebase for security issues" \
   --subtask "Scan src/auth.py for auth bypasses" \
   --subtask "Scan src/api.py for injection flaws" \
@@ -344,7 +344,7 @@ How it works:
 **Adversarial verification**: Run a task, then spawn a separate verifier agent to adversarially check the output against a rubric. Repeat until PASS or max rounds reached.
 
 ```bash
-python3 claude_orchestrator.py verify \
+python3 cc_workflows.py verify \
   "Implement a JWT authentication middleware for FastAPI" \
   --rubric "1. Must have unit tests covering success/failure cases
             2. Must validate token expiry
@@ -366,7 +366,7 @@ How it works:
 **Generate-and-filter**: Generate N ideas/solutions, then filter them by a rubric, returning only the highest quality candidates.
 
 ```bash
-python3 claude_orchestrator.py genfilter \
+python3 cc_workflows.py genfilter \
   "Generate 5 creative names for a CLI tool that manages dotfiles" \
   --count 5 \
   --rubric "Short (1-2 syllables), memorable, no common conflicts, available as npm package" \
@@ -384,7 +384,7 @@ How it works:
 **Tournament**: Have N agents compete on the same task using different approaches, then a judge agent picks the winner.
 
 ```bash
-python3 claude_orchestrator.py tournament \
+python3 cc_workflows.py tournament \
   "Implement a thread-safe LRU cache in Python" \
   --contestants 3 \
   --judge "Best solution: correct thread safety, O(1) get/put, clean code, good tests"
@@ -401,7 +401,7 @@ How it works:
 **Loop until done**: For tasks with an unknown amount of work, loop spawning agents until a stop condition is met (instead of a fixed number of passes).
 
 ```bash
-python3 claude_orchestrator.py loop_until \
+python3 cc_workflows.py loop_until \
   "Investigate why the CI pipeline is failing and fix all issues" \
   --stop-condition "CI pipeline passes on the main branch" \
   --max-iterations 10
@@ -417,7 +417,7 @@ How it works:
 ## CLI Reference
 
 ```
-python3 claude_orchestrator.py <command> [options]
+python3 cc_workflows.py <command> [options]
 
 commands:
   agents                              List available agents
@@ -512,12 +512,12 @@ CC Workflows integrates with Superpowers in two ways:
 
 ```bash
 # TDD enforced via auto-injection
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "Implement user registration using TDD" \
   --max-steps 50
 
 # Subagent-driven development via auto-injection
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "Refactor auth module using subagent-driven-development" \
   --max-steps 80
 ```
@@ -556,11 +556,11 @@ See [`references/output-parsing.md`](references/output-parsing.md) for the full 
 
 | Symptom | Fix |
 |---------|-----|
-| `claude: command not found` | Set the full path to the `claude` binary in `claude_orchestrator.py` (`cmd[0]`). Common path: `/Users/<user>/.local/bin/claude` |
+| `claude: command not found` | Set the full path to the `claude` binary in `cc_workflows.py` (`cmd[0]`). Common path: `/Users/<user>/.local/bin/claude` |
 | `EOFError` in `--interactive` | `--interactive` requires a TTY. Remove it; do clarification in the Claude Code conversation first |
 | `result.result` is empty | Normal — the parser falls back to `assistant` event text blocks |
 | Worktree merge conflict | The worktree is preserved at `/tmp/orchestrator-worktrees/orchestrator-<name>`. Resolve manually, then run `git merge --no-edit orchestrator-<name>` from your project root |
-| State file grows large | Run `python3 claude_orchestrator.py loop "dummy" --max-steps 0` to reset (completes any pending loop and clears state) |
+| State file grows large | Run `python3 cc_workflows.py loop "dummy" --max-steps 0` to reset (completes any pending loop and clears state) |
 
 ## License
 

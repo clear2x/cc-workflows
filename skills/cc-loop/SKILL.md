@@ -12,7 +12,7 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: list files
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "Step 1: list files
 Step 2: read calculator.py
 Step 3: read logger.py
 Step 4: report findings" --max-steps 100
@@ -24,10 +24,10 @@ Step 4: report findings" --max-steps 100
 
 ```bash
 # 第一次：跑 2 步
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "..." --max-steps 2
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "..." --max-steps 2
 
 # 第二次：继续
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "..." --max-steps 2
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "..." --max-steps 2
 ```
 
 ## 说明
@@ -40,5 +40,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "..." --max-st
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "<多行prompt>" --max-steps <N> [--agent <agent>]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop "<多行prompt>" --max-steps <N> [--agent <agent>]
 ```

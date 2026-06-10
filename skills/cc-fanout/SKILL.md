@@ -12,7 +12,7 @@ Fan-out-and-synthesize 模式：将大任务拆成多个子任务并发执行，
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py fanout \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py fanout \
   "分析整个 src/ 目录的代码质量" \
   --subtask "分析 src/auth.py" --agent Explore \
   --subtask "分析 src/api.py" --agent Explore \
@@ -29,5 +29,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py fanout \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py fanout "<总任务>" --subtask "<子任务1>" --agent <agent> [--subtask "<子任务2>" ...]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py fanout "<总任务>" --subtask "<子任务1>" --agent <agent> [--subtask "<子任务2>" ...]
 ```

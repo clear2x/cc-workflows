@@ -12,7 +12,7 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline \
   --step "探索: 列出所有 .py 文件" --agent Explore \
   --step "分析: 评估复杂度" --agent general-purpose \
   --step "规划: 给出重构方案" --agent Plan
@@ -27,5 +27,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline --step "<步骤>" --agent <agent> [--step "<步骤>" --agent <agent> ...]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline --step "<步骤>" --agent <agent> [--step "<步骤>" --agent <agent> ...]
 ```

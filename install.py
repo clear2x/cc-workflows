@@ -7,7 +7,7 @@ from pathlib import Path
 REPO_DIR = Path(__file__).parent.resolve()
 SKILLS_DIR = REPO_DIR / "skills"
 MAIN_SKILL = SKILLS_DIR / "cc-workflows"
-SCRIPT = MAIN_SKILL / "claude_orchestrator.py"
+SCRIPT = MAIN_SKILL / "cc_workflows.py"
 SKILL_MD = MAIN_SKILL / "SKILL.md"
 TARGET_HERMES = Path.home() / ".hermes" / "skills" / "cc-workflows"
 TARGET_CC = Path.home() / ".claude" / "skills" / "cc-workflows"
@@ -15,7 +15,7 @@ TARGET_CC = Path.home() / ".claude" / "skills" / "cc-workflows"
 
 def install_skill(src: Path, dest: Path):
     dest.mkdir(parents=True, exist_ok=True)
-    for fname in ["SKILL.md", "claude_orchestrator.py"]:
+    for fname in ["SKILL.md", "cc_workflows.py"]:
         src_file = src / fname
         if src_file.exists():
             shutil.copy2(src_file, dest / fname)

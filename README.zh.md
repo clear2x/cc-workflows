@@ -69,15 +69,15 @@ npx skills add https://github.com/clear2x/cc-workflows
 # npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
 
 # 2. 验证可用 agent
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 
 # 3. 单任务执行
-python3 ~/.hermes/skills/cc-workflows/cc-run/claude_orchestrator.py run \
+python3 ~/.hermes/skills/cc-workflows/cc-run/cc_workflows.py run \
   "重构 auth.py，添加类型提示" \
   --agent general-purpose
 
 # 4. 长任务分段执行（自动断点续接）
-python3 ~/.hermes/skills/cc-workflows/cc-loop/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/cc-loop/cc_workflows.py loop \
   "第 1 步: 列出 src/ 下所有 .py 文件
 第 2 步: 读取 auth.py 并总结结构
 第 3 步: 读取 api.py 并总结结构
@@ -142,22 +142,22 @@ python3 install.py
 ```
 
 安装位置：
-- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — 核心脚本（Hermes Agent 用）
-- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — 核心脚本（Claude Code 用）
+- `~/.hermes/skills/cc-workflows/cc_workflows.py` — 核心脚本（Hermes Agent 用）
+- `~/.claude/skills/cc-workflows/cc_workflows.py` + `SKILL.md` — 核心脚本（Claude Code 用）
 
 ### 方式 C：手动复制
 
 ```bash
 # Claude Code 项目级
 mkdir -p .claude/skills/cc-workflows
-cp skills/cc-workflows/claude_orchestrator.py .claude/skills/cc-workflows/
+cp skills/cc-workflows/cc_workflows.py .claude/skills/cc-workflows/
 cp skills/cc-workflows/SKILL.md .claude/skills/cc-workflows/
 ```
 
 ```bash
 # Hermes Agent 全局
 mkdir -p ~/.hermes/skills/cc-workflows
-cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
+cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 ```
 
 ## 12 种执行模式
@@ -167,7 +167,7 @@ cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
 不调用模型，30 秒内从 system init 事件读取所有可用 agent。
 
 ```bash
-python3 claude_orchestrator.py agents
+python3 cc_workflows.py agents
 ```
 
 ```
@@ -184,8 +184,8 @@ python3 claude_orchestrator.py agents
 执行单个 prompt，支持指定 agent 和 model。再次执行时自动续接上次会话。
 
 ```bash
-python3 claude_orchestrator.py run "任务描述" --agent Explore
-python3 claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-flash
+python3 cc_workflows.py run "任务描述" --agent Explore
+python3 cc_workflows.py run "任务描述" --agent Plan --model step-3.7-flash
 ```
 
 输出：
@@ -201,7 +201,7 @@ python3 claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-
 每一步可使用不同 agent，session 自动续接。
 
 ```bash
-python3 claude_orchestrator.py pipeline \
+python3 cc_workflows.py pipeline \
   --step "Explore: 列出 src/ 下所有 .py 文件" --agent Explore \
   --step "Analyze: 评估每个文件的圈复杂度" --agent general-purpose \
   --step "Plan: 给出重构方案" --agent Plan
@@ -212,7 +212,7 @@ python3 claude_orchestrator.py pipeline \
 在指定步骤评估条件，根据结果跳转到 `--then-step` 或 `--else-step`。
 
 ```bash
-python3 claude_orchestrator.py branch \
+python3 cc_workflows.py branch \
   --step "扫描: 统计高危安全漏洞数量，输出 bugs_found = <数字>" --agent Explore \
   --step "报告: 总结发现" --agent general-purpose \
   --step "修复: 生成修复方案（漏洞数 > 0 时执行）" --agent general-purpose \
@@ -232,7 +232,7 @@ python3 claude_orchestrator.py branch \
 最多 8 个任务同时执行，每个任务拥有独立的 session 和 **git worktree 隔离**。
 
 ```bash
-python3 claude_orchestrator.py parallel \
+python3 cc_workflows.py parallel \
   --task "分析 src/auth.py 并列出安全问题" --agent Explore --name auth \
   --task "分析 src/api.py 并列出安全问题" --agent Explore --name api \
   --task "分析 src/db.py 并列出安全问题" --agent Explore --name db
@@ -266,7 +266,7 @@ Worktree 行为控制：
 将 prompt 按换行拆成独立步骤，每步执行一次，自动续接。中断后重新运行会从上次停止的步骤继续。
 
 ```bash
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "第 1 步: 列出所有 Python 文件
 第 2 步: 读取 auth.py 并总结
 第 3 步: 读取 api.py 并总结
@@ -279,11 +279,11 @@ python3 claude_orchestrator.py loop \
 
 ```bash
 # 第一次：最多 2 步
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 # → ⏸️ 本次执行 2 段完成，还剩 2 步未执行
 
 # 第二次：同一条命令，从第 3 步继续
-python3 claude_orchestrator.py loop "..." --max-steps 2
+python3 cc_workflows.py loop "..." --max-steps 2
 # → 🔄 从上次中断处继续，还剩 2 步... 第 3 步 → 第 4 步
 ```
 
@@ -292,7 +292,7 @@ python3 claude_orchestrator.py loop "..." --max-steps 2
 ### `sessions`：查看会话状态
 
 ```bash
-python3 claude_orchestrator.py sessions
+python3 cc_workflows.py sessions
 ```
 
 ## 6 种官方 Workflow 模式
@@ -304,7 +304,7 @@ Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-
 先用一个 classifier agent 对任务进行分类，再根据分类结果路由到不同的 agent/行为。
 
 ```bash
-python3 claude_orchestrator.py classify \
+python3 cc_workflows.py classify \
   "Classify this bug: security vulnerability or performance issue?" \
   --class-security "Run security audit, check CWE patterns, produce severity report" \
   --class-performance "Profile the code, identify bottlenecks, suggest optimizations" \
@@ -322,7 +322,7 @@ python3 claude_orchestrator.py classify \
 将任务拆分为多个小步骤，每个步骤由独立的 agent 并发执行，最后汇总所有结果。
 
 ```bash
-python3 claude_orchestrator.py fanout \
+python3 cc_workflows.py fanout \
   "Analyze the codebase for security issues" \
   --subtask "Scan src/auth.py for auth bypasses" \
   --subtask "Scan src/api.py for injection flaws" \
@@ -341,7 +341,7 @@ python3 claude_orchestrator.py fanout \
 执行任务，然后由独立的 verifier agent 根据 rubric 对抗式地检查输出质量，不合格则自动修复，循环至通过或达到最大轮数。
 
 ```bash
-python3 claude_orchestrator.py verify \
+python3 cc_workflows.py verify \
   "Implement a JWT authentication middleware for FastAPI" \
   --rubric "1. Must have unit tests covering success/failure cases
             2. Must validate token expiry
@@ -363,7 +363,7 @@ python3 claude_orchestrator.py verify \
 生成 N 个方案，再用 rubric 进行评分筛选，只返回质量最高的 K 个候选。
 
 ```bash
-python3 claude_orchestrator.py genfilter \
+python3 cc_workflows.py genfilter \
   "Generate 5 creative names for a CLI tool that manages dotfiles" \
   --count 5 \
   --rubric "Short (1-2 syllables), memorable, no common conflicts, available as npm package" \
@@ -381,7 +381,7 @@ python3 claude_orchestrator.py genfilter \
 N 个 agent 使用不同方法竞争同一个任务，由 judge agent  pairwise 评比选出最终赢家。
 
 ```bash
-python3 claude_orchestrator.py tournament \
+python3 cc_workflows.py tournament \
   "Implement a thread-safe LRU cache in Python" \
   --contestants 3 \
   --judge "Best solution: correct thread safety, O(1) get/put, clean code, good tests"
@@ -398,7 +398,7 @@ python3 claude_orchestrator.py tournament \
 对工作量不确定的任务，循环执行直到满足停止条件（而非固定次数）。
 
 ```bash
-python3 claude_orchestrator.py loop_until \
+python3 cc_workflows.py loop_until \
   "Investigate why the CI pipeline is failing and fix all issues" \
   --stop-condition "CI pipeline passes on the main branch" \
   --max-iterations 10
@@ -414,7 +414,7 @@ python3 claude_orchestrator.py loop_until \
 ## CLI 参考
 
 ```
-python3 claude_orchestrator.py <命令> [选项]
+python3 cc_workflows.py <命令> [选项]
 
 命令:
   agents                                   查看可用 agent
@@ -531,12 +531,12 @@ CC Workflows 通过两种方式与 Superpowers 集成：
 
 ```bash
 # 通过自动注入强制 TDD
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "实现用户注册功能，使用 TDD" \
   --max-steps 50
 
 # 通过自动注入强制 subagent 驱动开发
-python3 claude_orchestrator.py loop \
+python3 cc_workflows.py loop \
   "使用 subagent-driven-development 重构 auth 模块" \
   --max-steps 80
 ```
@@ -556,7 +556,7 @@ python3 claude_orchestrator.py loop \
 | `--interactive` 报 `EOFError` | `--interactive` 需要 TTY。去掉该参数，在 Claude Code 对话中先完成需求澄清 |
 | `result.result` 为空 | 正常现象 — 解析器会自动回退到 `assistant` 事件的 text 块 |
 | Worktree 合并冲突 | Worktree 保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>`，手动解决后在项目根执行 `git merge --no-edit orchestrator-<name>` |
-| 状态文件过大 | 执行 `python3 claude_orchestrator.py loop "dummy" --max-steps 0` 可重置状态（完成 pending loop 并清空） |
+| 状态文件过大 | 执行 `python3 cc_workflows.py loop "dummy" --max-steps 0` 可重置状态（完成 pending loop 并清空） |
 
 ## 开源协议
 

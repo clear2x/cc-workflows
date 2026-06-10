@@ -12,7 +12,7 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline \
   --step "扫描: 找出所有安全问题" --agent Explore \
   --step "判断: 统计高危问题数" --agent general-purpose \
   --step "修复: 生成修复方案（满足条件时执行）" --agent general-purpose \
@@ -29,5 +29,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline --step ... --if "<条件>" --then-step <N> --else-step <M>
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py pipeline --step ... --if "<条件>" --then-step <N> --else-step <M>
 ```

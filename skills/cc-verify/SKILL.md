@@ -12,7 +12,7 @@ Adversarial verification 模式：执行任务后，用 rubric 标准验证，�
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py verify \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py verify \
   "实现 LRU cache" \
   --rubric "必须有类型提示，必须有测试，必须通过 mypy" \
   --max-rounds 3
@@ -30,5 +30,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py verify \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py verify "<任务>" --rubric "<验证标准>" [--agent <agent>] [--max-rounds <N>]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py verify "<任务>" --rubric "<验证标准>" [--agent <agent>] [--max-rounds <N>]
 ```

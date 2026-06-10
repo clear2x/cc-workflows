@@ -12,7 +12,7 @@ version: 1.0.0
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 ```
 
 ## 说明
@@ -24,5 +24,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py agents
 ```

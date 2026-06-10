@@ -1,7 +1,7 @@
 """
 tests/test_official_patterns.py
 Tests for the 6 official workflow pattern commands (classify, fanout, verify,
-genfilter, tournament, loop_until) in claude_orchestrator.py.
+genfilter, tournament, loop_until) in cc_workflows.py.
 
 Strategy:
 - Mock run_claude() so no real `claude -p` subprocess is spawned.
@@ -67,7 +67,7 @@ def _import_orchestrator(tmp_path, monkeypatch):
 
     # Must patch before import so module-level constants pick up tmp paths
     with patch.object(Path, "home", return_value=tmp_path):
-        import claude_orchestrator as orch
+        import cc_workflows as orch
         importlib.reload(orch)
 
     orch.WORKTREE_BASE = wt_base
@@ -190,7 +190,7 @@ class TestFanout:
         ]
 
         with patch.object(orch, "run_claude", side_effect=fake_run_claude), \
-             patch("claude_orchestrator.ThreadPoolExecutor") as MockTPE:
+             patch("cc_workflows.ThreadPoolExecutor") as MockTPE:
             # Simulate concurrent execution
             from concurrent.futures import Future
 
@@ -615,7 +615,7 @@ class TestLoopUntil:
 
 class TestArgParsers:
     def test_parse_classify(self):
-        from claude_orchestrator import _parse_classify_args
+        from cc_workflows import _parse_classify_args
         p, a, d = _parse_classify_args([
             "Classify bug",
             "--class-security", "audit",
@@ -627,7 +627,7 @@ class TestArgParsers:
         assert d == "general"
 
     def test_parse_classify_positional(self):
-        from claude_orchestrator import _parse_classify_args
+        from cc_workflows import _parse_classify_args
         p, a, d = _parse_classify_args([
             "Positional prompt",
             "--class-x", "do x",
@@ -637,7 +637,7 @@ class TestArgParsers:
         assert d == ""
 
     def test_parse_fanout(self):
-        from claude_orchestrator import _parse_fanout_args
+        from cc_workflows import _parse_fanout_args
         p, s, sp, a = _parse_fanout_args([
             "Main prompt",
             "--subtask", "Check A", "--name", "A",
@@ -653,7 +653,7 @@ class TestArgParsers:
         assert a == "Explore"
 
     def test_parse_verify(self):
-        from claude_orchestrator import _parse_verify_args
+        from cc_workflows import _parse_verify_args
         p, r, va, mr = _parse_verify_args([
             "Task text",
             "--rubric", "Must be tested",
@@ -666,7 +666,7 @@ class TestArgParsers:
         assert mr == 5
 
     def test_parse_genfilter(self):
-        from claude_orchestrator import _parse_genfilter_args
+        from cc_workflows import _parse_genfilter_args
         p, c, r, fp, ft, a = _parse_genfilter_args([
             "Generate names",
             "--count", "7",
@@ -683,7 +683,7 @@ class TestArgParsers:
         assert a == "general-purpose"
 
     def test_parse_tournament(self):
-        from claude_orchestrator import _parse_tournament_args
+        from cc_workflows import _parse_tournament_args
         p, c, jp, a, m = _parse_tournament_args([
             "LRU cache",
             "--contestants", "5",
@@ -698,7 +698,7 @@ class TestArgParsers:
         assert m == "sonnet"
 
     def test_parse_loop_until(self):
-        from claude_orchestrator import _parse_loop_until_args
+        from cc_workflows import _parse_loop_until_args
         p, sc, mi, a = _parse_loop_until_args([
             "Fix tests",
             "--stop-condition", "All pass",
@@ -711,7 +711,7 @@ class TestArgParsers:
         assert a == "Explore"
 
     def test_parse_loop_until_missing_stop_condition(self):
-        from claude_orchestrator import _parse_loop_until_args
+        from cc_workflows import _parse_loop_until_args
         with pytest.raises(SystemExit):
             _parse_loop_until_args(["Fix tests"])
 
@@ -786,7 +786,7 @@ class TestSessions:
         result.returncode = 0
         result.stdout = json.dumps(fake_agents)
 
-        with patch("claude_orchestrator.subprocess.run", return_value=result):
+        with patch("cc_workflows.subprocess.run", return_value=result):
             orch.cmd_sessions()
 
         captured = capsys.readouterr().out

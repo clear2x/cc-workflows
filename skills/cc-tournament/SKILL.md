@@ -12,7 +12,7 @@ Tournament 模式：N 个 agent 独立完成同一任务，judge agent 评比选
 ## 用法
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py tournament \
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py tournament \
   "实现一个 LRU cache" \
   --contestants 3 \
   --agent general-purpose \
@@ -29,5 +29,5 @@ python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py tournament \
 ## 快速命令
 
 ```bash
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py tournament "<任务>" --contestants <N> [--agent <agent>] [--judge-agent <agent>]
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py tournament "<任务>" --contestants <N> [--agent <agent>] [--judge-agent <agent>]
 ```

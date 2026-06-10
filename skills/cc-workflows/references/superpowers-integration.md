@@ -43,4 +43,4 @@ Fallbacks:
 
 ## Tuning
 
-Edit the `superpowers_injection` block in `claude_orchestrator.py` to add new keyword→skill mappings. Keep each injection under 300 chars to avoid polluting context.
+Edit the `superpowers_injection` block in `cc_workflows.py` to add new keyword→skill mappings. Keep each injection under 300 chars to avoid polluting context.
