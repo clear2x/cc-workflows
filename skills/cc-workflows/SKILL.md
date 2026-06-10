@@ -237,29 +237,140 @@ python3 ~/.claude/skills/cc-workflows/cc_workflows.py loop_until "修复所有�
 
 ## 进度反馈机制
 
-cc-workflows 在执行过程中会自动将进度写入 `/tmp/cc-workflows-progress.json`，供 Claude Code 后台轮询读取。
+cc-workflows 的编排应**优先通过 Claude Code 原生 Workflow 工具**执行，这样用户能在 Claude Code 的进度树中实时看到每个阶段和 agent 的状态。只有当任务超出 Workflow 工具能力（上下文溢出、断点续接、超长步骤）时，才回退到 cc_workflows.py 子进程。
 
-### 执行策略
+### 优先方式：原生 Workflow 工具编排
 
-**短任务（< 12 轮）**：直接在前台执行，无需后台轮询。
+**核心原则**：用 Workflow 工具编排 cc-workflows 的模式，用户实时看到 `▸ Phase` → `✅ agent:xxx` 的进度树。
 
-**长任务（> 12 轮，或 parallel/loop 等耗时模式）**：
-1. 用 Bash `run_in_background=true` 后台启动 cc-workflows 命令
-2. 用 ScheduleWakeup 每 30-60 秒轮询一次 `python3 cc_workflows.py progress`
-3. 将进度汇报给用户
-4. 任务完成后（后台通知到达），展示最终结果
+**模式映射（Workflow 工具实现）：**
 
-### Claude 执行指令
+| cc-workflows 模式 | Workflow 工具实现 |
+|-------------------|------------------|
+| `run` | `agent(prompt)` |
+| `parallel` | `parallel([() => agent(...), () => agent(...)])` |
+| `pipeline` | `pipeline(items, stage1, stage2, ...)` |
+| `verify` | `agent(执行)` → `agent(验证)` → 循环 |
+| `fanout` | `parallel()` 子任务 → `agent()` 汇总 |
+| `genfilter` | `parallel()` 生成 + `agent()` 筛选 |
+| `tournament` | `parallel()` 竞争 + `agent()` 评判 |
+| `classify` | `agent(分类)` → 根据结果 `agent(路由)` |
+| `loop_until` | while 循环 + `agent(执行)` + `agent(检查条件)` |
 
-当用户触发长任务时，Claude 应按以下流程执行：
+**Claude 执行指令：**
+
+当用户触发 cc-workflows 时，Claude 应**优先使用 Workflow 工具编排**：
 
 ```
-1. 告知用户"后台执行中，我会定期汇报进度"
-2. 用 Bash run_in_background=true 启动 cc-workflows 命令
-3. 用 ScheduleWakeup 设 30-60 秒后轮询进度：
-   prompt: "读取 cc-workflows 进度并汇报给用户：python3 ~/.hermes/skills/cc-workflows/cc_workflows.py progress"
-4. 收到后台任务完成通知后，读取输出并展示最终结果
+用户：用 cc-workflows 并行分析这 3 个文件
+
+Claude 调用 Workflow 工具：
+→ phase('Parallel Analysis')
+→ parallel([
+    () => agent('分析 auth.py 安全性', {label: 'auth'}),
+    () => agent('分析 api.py 性能', {label: 'api'}),
+    () => agent('分析 db.py 结构', {label: 'db'}),
+  ])
+
+用户在进度树中看到：
+  ▸ Parallel Analysis (3 agents)
+    ✅ agent:auth — 分析 auth.py 安全性
+    ✅ agent:api — 分析 api.py 性能
+    ✅ agent:db — 分析 db.py 结构
 ```
+
+**具体示例 — parallel 模式：**
+
+```javascript
+export const meta = {
+  name: 'cc-parallel',
+  description: '并行分析',
+  phases: [{ title: 'Parallel Analysis' }],
+}
+phase('Parallel Analysis')
+const results = await parallel([
+  () => agent('分析 auth.py 的安全性：SQL注入、XSS、权限绕过', {label: 'auth'}),
+  () => agent('分析 api.py 的性能瓶颈：N+1查询、缺少缓存', {label: 'api'}),
+  () => agent('分析 db.py 的数据完整性：约束缺失、竞态条件', {label: 'db'}),
+])
+return results.filter(Boolean)
+```
+
+**具体示例 — verify 模式：**
+
+```javascript
+export const meta = {
+  name: 'cc-verify',
+  description: '实现并对抗验证',
+  phases: [{ title: 'Implement' }, { title: 'Verify' }],
+}
+phase('Implement')
+const impl = await agent('实现 JWT 中间件，支持验证、刷新、黑名单', {label: 'implement'})
+phase('Verify')
+const verdict = await agent(
+  `验证以下实现：\n${impl}\n\n标准：有测试、错误处理、类型提示`, {label: 'verify'}
+)
+return { impl, verdict }
+```
+
+**具体示例 — tournament 模式：**
+
+```javascript
+export const meta = {
+  name: 'cc-tournament',
+  description: 'N 方案竞争',
+  phases: [{ title: 'Compete' }, { title: 'Judge' }],
+}
+phase('Compete')
+const contestants = await parallel([
+  () => agent('用直接简洁的方式实现 LRU 缓存', {label: 'contestant-1'}),
+  () => agent('用健壮生产级的方式实现 LRU 缓存', {label: 'contestant-2'}),
+  () => agent('用优化的方式实现 LRU 缓存', {label: 'contestant-3'}),
+])
+phase('Judge')
+const winner = await agent(
+  `评比以下方案选出最佳：\n${contestants.join('\n---\n')}`, {label: 'judge'}
+)
+return { contestants, winner }
+```
+
+**具体示例 — pipeline 模式：**
+
+```javascript
+export const meta = {
+  name: 'cc-pipeline',
+  description: '顺序流水线',
+  phases: [{ title: 'Explore' }, { title: 'Analyze' }, { title: 'Plan' }],
+}
+phase('Explore')
+const files = await agent('列出 src/ 下所有 .py 文件并评估复杂度', {label: 'explore'})
+phase('Analyze')
+const analysis = await agent(`基于以下文件列表分析代码质量：\n${files}`, {label: 'analyze'})
+phase('Plan')
+const plan = await agent(`基于分析给出重构方案：\n${analysis}`, {label: 'plan'})
+return { files, analysis, plan }
+```
+
+### 回退方式：cc_workflows.py + 进度轮询
+
+**仅在以下情况使用** cc_workflows.py 子进程：
+- 任务超过 **20+ 步**（Workflow 工具的上下文会溢出）
+- 需要**断点续接**（中断后恢复）
+- 需要 **Superpowers 约束自动注入**（loop 模式的关键词检测）
+- 大批量并行超过 **8 个任务**
+
+此时用 Bash `run_in_background=true` 后台执行 cc_workflows.py，用 ScheduleWakeup 定期轮询 `progress` 命令汇报给用户。
+
+### 决策标准
+
+| 条件 | 执行方式 |
+|------|---------|
+| 默认（大多数任务） | ✅ 原生 Workflow 工具编排 |
+| 任务 > 20 步 | ✅ cc_workflows.py 后台 |
+| 需要断点续接 | ✅ cc_workflows.py 后台 |
+| 需要 Superpowers 自动注入 | ✅ cc_workflows.py loop |
+| 大批量并行 > 8 任务 | ✅ cc_workflows.py 后台 |
+| 用户不确定 | ✅ 先用 Workflow 工具，超时再切 cc_workflows.py |
 
 ### 进度文件格式
 

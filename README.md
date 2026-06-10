@@ -440,40 +440,58 @@ global (auto-injected):
 
 ### Progress Feedback During Execution
 
-CC Workflows automatically writes structured progress to `/tmp/cc-workflows-progress.json` after each step. This enables **real-time progress reporting** in Claude Code conversations.
+CC Workflows **prioritizes Claude Code's native Workflow tool** for orchestration, so you see real-time progress in the progress tree. Only falls back to cc_workflows.py subprocess for tasks that exceed the Workflow tool's capacity.
 
-**How it works:**
+#### Primary: Native Workflow Tool Orchestration
 
-- **Short tasks** (< 12 rounds): Execute in foreground — Claude shows results when done.
-- **Long tasks** (> 12 rounds, or parallel/loop/verify modes): Claude runs the command in background, then periodically polls the progress file and reports to you.
-
-```
-💬 在 Claude Code 中：
-> /cc-workflows parallel 并行分析这 3 个文件
-
-Claude: 好的，后台执行中，我会定期汇报进度。
-
-[30秒后 Claude 自动汇报]
-📊 进度：
-  ✅ [auth] 完成, 4 turns, $0.02
-  🔄 [api] 执行中...
-  🔄 [db] 执行中...
-
-[60秒后]
-📊 全部完成：
-  ✅ [auth] 4 turns, $0.02
-  ✅ [api] 3 turns, $0.02
-  ✅ [db] 5 turns, $0.03
-  💰 总计: $0.07
-```
-
-To check progress manually:
+When you trigger a cc-workflows pattern, Claude uses the Workflow tool to orchestrate it — you see phases and agents update in real-time:
 
 ```
-💬 > /cc-workflows progress
+💬 > /cc-workflows parallel 并行分析这 3 个文件
+
+You see in real-time:
+  ▸ Parallel Analysis (3 agents)
+    ✅ agent:auth — 分析 auth.py 安全性
+    ✅ agent:api — 分析 api.py 性能
+    ✅ agent:db — 分析 db.py 结构
 ```
 
-Supported modes: `loop`, `parallel`, `pipeline`, `verify`, `loop_until`. The progress file is automatically cleaned up when the task completes.
+Mode mapping:
+
+| cc-workflows mode | Workflow tool implementation |
+|-------------------|------------------------------|
+| `parallel` | `parallel()` + `agent()` per task |
+| `pipeline` | `pipeline()` with multiple stages |
+| `verify` | `agent(exec)` → `agent(verify)` loop |
+| `fanout` | `parallel()` subtasks → `agent()` synthesize |
+| `tournament` | `parallel()` compete → `agent()` judge |
+| `classify` | `agent(classify)` → `agent(route)` |
+
+#### Fallback: cc_workflows.py + Progress Polling
+
+For tasks that **exceed the Workflow tool's capacity** (> 20 steps, need breakpoint resume, need Superpowers auto-injection, > 8 parallel tasks), Claude runs cc_workflows.py in background and polls the progress file:
+
+```
+💬 > /cc-workflows loop 重构 auth.py，分 7 步，最多 50 步
+
+Claude: 后台执行中，我会定期汇报进度。
+
+[30s later]
+📊 进度：3/7 步 | 💰 $0.12
+
+[task completes]
+🎉 全部 7 步完成！累计 25 轮, $0.34
+```
+
+#### Decision Guide
+
+| Condition | Execution method |
+|-----------|-----------------|
+| Default (most tasks) | Native Workflow tool |
+| Task > 20 steps | cc_workflows.py background |
+| Need breakpoint resume | cc_workflows.py background |
+| Need Superpowers auto-injection | cc_workflows.py loop |
+| Batch parallel > 8 tasks | cc_workflows.py background |
 
 ### Automatic Project Root Detection
 

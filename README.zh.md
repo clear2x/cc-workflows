@@ -440,40 +440,66 @@ cc_workflows.py <命令> [选项]
 
 ### 执行过程中的进度反馈
 
-CC Workflows 在每步执行完成后自动将结构化进度写入 `/tmp/cc-workflows-progress.json`，支持 Claude Code 对话中的**实时进度汇报**。
+cc-workflows 支持**两种执行形式**，都提供实时进度反馈：
 
-**工作机制：**
+#### 形式一：原生 Workflow 工具编排
 
-- **短任务**（< 12 轮）：前台执行，Claude 直接展示结果。
-- **长任务**（> 12 轮，或 parallel/loop/verify 模式）：Claude 后台执行，定期轮询进度文件并向你汇报。
-
-```
-💬 在 Claude Code 中：
-> /cc-workflows parallel 并行分析这 3 个文件
-
-Claude: 好的，后台执行中，我会定期汇报进度。
-
-[30秒后 Claude 自动汇报]
-📊 进度：
-  ✅ [auth] 完成, 4 turns, $0.02
-  🔄 [api] 执行中...
-  🔄 [db] 执行中...
-
-[60秒后]
-📊 全部完成：
-  ✅ [auth] 4 turns, $0.02
-  ✅ [api] 3 turns, $0.02
-  ✅ [db] 5 turns, $0.03
-  💰 总计: $0.07
-```
-
-手动查看进度：
+Claude 使用 Claude Code 内置的 Workflow 工具编排 cc-workflows 模式，用户在进度树中实时看到每个阶段和 agent 的状态：
 
 ```
-💬 > /cc-workflows progress
+💬 > /cc-workflows parallel 并行分析这 3 个文件
+
+实时进度树：
+  ▸ Parallel Analysis (3 agents)
+    ✅ agent:auth — 分析 auth.py 安全性
+    ✅ agent:api — 分析 api.py 性能
+    ✅ agent:db — 分析 db.py 结构
 ```
 
-支持的模式：`loop`、`parallel`、`pipeline`、`verify`、`loop_until`。任务完成后进度文件自动清理。
+模式映射：
+
+| cc-workflows 模式 | Workflow 工具实现 |
+|-------------------|------------------|
+| `parallel` | `parallel()` + 每个 `agent()` |
+| `pipeline` | `pipeline()` + 多个 stage |
+| `verify` | `agent(执行)` → `agent(验证)` 循环 |
+| `fanout` | `parallel()` 子任务 → `agent()` 汇总 |
+| `tournament` | `parallel()` 竞争 → `agent()` 评判 |
+| `classify` | `agent(分类)` → `agent(路由)` |
+
+**适用场景**：大多数任务，需要实时可视化进度，交互式工作流。
+
+#### 形式二：cc_workflows.py + 进度轮询
+
+使用 cc_workflows.py 子进程后台执行，Claude 定期轮询进度文件汇报：
+
+```
+💬 > /cc-workflows loop 重构 auth.py，分 7 步，最多 50 步
+
+Claude: 后台执行中，我会定期汇报进度。
+
+[30秒后自动汇报]
+📊 进度：3/7 步 | 💰 $0.12
+  当前: Step 3 — 重构，提取公共逻辑
+  ✅ Step 1 | 5 turns | $0.04
+  ✅ Step 2 | 3 turns | $0.03
+
+[任务完成]
+🎉 全部 7 步完成！累计 25 轮, $0.34
+```
+
+**适用场景**：超长任务（> 20 步）、需要断点续接、需要 Superpowers 约束自动注入、大批量并行（> 8 任务）。
+
+#### 选择指南
+
+| 条件 | 推荐形式 |
+|------|---------|
+| 大多数任务 | 形式一：原生 Workflow 工具 |
+| 任务 > 20 步 | 形式二：cc_workflows.py 后台 |
+| 需要断点续接 | 形式二 |
+| 需要 Superpowers 自动注入 | 形式二（loop 模式） |
+| 大批量并行 > 8 任务 | 形式二 |
+| 用户不确定 | 形式一，超时再切形式二 |
 
 ### 自动检测项目根目录
 
