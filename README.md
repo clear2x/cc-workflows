@@ -70,6 +70,9 @@ CC Workflows is a **production-grade** Python wrapper around `claude -p` (Claude
 # 1. Install (one-line)
 npx skills add https://github.com/clear2x/cc-workflows
 
+# Or install a single mode:
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
+
 # 2. Verify agents available
 python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 
@@ -110,14 +113,20 @@ In short: official dynamic workflows are **Claude-authored, JS-based, and flexib
 
 ```bash
 npx skills add https://github.com/clear2x/cc-workflows
+
+# Or install a single mode:
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
 ```
 
-This copies the `skills/cc-workflows/` folder into your local skills directory automatically.
+This copies all mode skills (`cc-run`, `cc-pipeline`, `cc-loop`, etc.) into your local skills directory.
 
 Install a single skill by install name:
 
 ```bash
-npx skills add https://github.com/clear2x/cc-workflows --skill "cc-workflows"
+npx skills add https://github.com/clear2x/cc-workflows
+
+# Or install a single mode:
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run --skill "cc-workflows"
 ```
 
 ### Option B: `install.py`
@@ -129,8 +138,8 @@ python3 install.py
 ```
 
 Copies the script to:
-- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — Hermes Agent
-- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — Claude Code
+- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — core script (Hermes Agent)
+- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — core script (Claude Code)
 
 ### Option C: Manual copy
 

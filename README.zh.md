@@ -65,16 +65,19 @@ CC Workflows 是一个**生产级**的 Python 封装，底层调用 `claude -p`�
 # 1. 安装（一条命令）
 npx skills add https://github.com/clear2x/cc-workflows
 
+# 或安装单个模式技能：
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
+
 # 2. 验证可用 agent
 python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 
 # 3. 单任务执行
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run \
+python3 ~/.hermes/skills/cc-workflows/cc-run/claude_orchestrator.py run \
   "重构 auth.py，添加类型提示" \
   --agent general-purpose
 
 # 4. 长任务分段执行（自动断点续接）
-python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/cc-loop/claude_orchestrator.py loop \
   "第 1 步: 列出 src/ 下所有 .py 文件
 第 2 步: 读取 auth.py 并总结结构
 第 3 步: 读取 api.py 并总结结构
@@ -114,14 +117,20 @@ CC Workflows 走的是另一条路线：它提供 6 个 CLI **执行原语** 和
 
 ```bash
 npx skills add https://github.com/clear2x/cc-workflows
+
+# 或安装单个模式技能：
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run
 ```
 
-会自动将 `skills/cc-workflows/` 文件夹复制到本地技能目录。
+会自动将所有模式技能（cc-run, cc-pipeline, cc-loop 等）复制到本地技能目录。
 
 安装单个 skill（按 install name）：
 
 ```bash
-npx skills add https://github.com/clear2x/cc-workflows --skill "cc-workflows"
+npx skills add https://github.com/clear2x/cc-workflows
+
+# 或安装单个模式技能：
+# npx skills add https://github.com/clear2x/cc-workflows --skill cc-run --skill "cc-workflows"
 ```
 
 ### 方式 B：`install.py`
@@ -133,8 +142,8 @@ python3 install.py
 ```
 
 安装位置：
-- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — Hermes Agent 用
-- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
+- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — 核心脚本（Hermes Agent 用）
+- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — 核心脚本（Claude Code 用）
 
 ### 方式 C：手动复制
 
