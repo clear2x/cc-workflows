@@ -68,18 +68,18 @@ Claude Workflow Orchestrator is a **production-grade** Python wrapper around `cl
 
 ```bash
 # 1. Install (one-line)
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator
+npx skills add https://github.com/clear2x/cc-workflows
 
 # 2. Verify agents available
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 
 # 3. Run a single task
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run \
   "Refactor auth.py, add type hints" \
   --agent general-purpose
 
 # 4. Long multi-step task (auto-resumes on re-run)
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
   "Step 1: list Python files
 Step 2: read calculator.py and summarize
 Step 3: read logger.py and summarize
@@ -109,42 +109,42 @@ In short: official dynamic workflows are **Claude-authored, JS-based, and flexib
 ### Option A: `npx skills add` (recommended)
 
 ```bash
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator
+npx skills add https://github.com/clear2x/cc-workflows
 ```
 
-This copies the `skills/claude-workflow-orchestrator/` folder into your local skills directory automatically.
+This copies the `skills/cc-workflows/` folder into your local skills directory automatically.
 
 Install a single skill by install name:
 
 ```bash
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator --skill "claude-workflow-orchestrator"
+npx skills add https://github.com/clear2x/cc-workflows --skill "cc-workflows"
 ```
 
 ### Option B: `install.py`
 
 ```bash
-git clone https://github.com/clear2x/claude-workflow-orchestrator.git
-cd claude-workflow-orchestrator
+git clone https://github.com/clear2x/cc-workflows.git
+cd cc-workflows
 python3 install.py
 ```
 
 Copies the script to:
-- `~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py` — Hermes Agent
-- `~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code
+- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — Hermes Agent
+- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — Claude Code
 
 ### Option C: Manual copy
 
 ```bash
 # Claude Code project-level
-mkdir -p .claude/skills/claude-workflow-orchestrator
-cp skills/claude-workflow-orchestrator/claude_orchestrator.py .claude/skills/claude-workflow-orchestrator/
-cp skills/claude-workflow-orchestrator/SKILL.md .claude/skills/claude-workflow-orchestrator/
+mkdir -p .claude/skills/cc-workflows
+cp skills/cc-workflows/claude_orchestrator.py .claude/skills/cc-workflows/
+cp skills/cc-workflows/SKILL.md .claude/skills/cc-workflows/
 ```
 
 ```bash
 # Hermes Agent global
-mkdir -p ~/.hermes/skills/claude-workflow-orchestrator
-cp skills/claude-workflow-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-workflow-orchestrator/
+mkdir -p ~/.hermes/skills/cc-workflows
+cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
 ```
 
 ## 12 Execution Modes

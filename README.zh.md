@@ -63,18 +63,18 @@ Claude Orchestrator 是一个**生产级**的 Python 封装，底层调用 `clau
 
 ```bash
 # 1. 安装（一条命令）
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator
+npx skills add https://github.com/clear2x/cc-workflows
 
 # 2. 验证可用 agent
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 
 # 3. 单任务执行
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run \
   "重构 auth.py，添加类型提示" \
   --agent general-purpose
 
 # 4. 长任务分段执行（自动断点续接）
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
   "第 1 步: 列出 src/ 下所有 .py 文件
 第 2 步: 读取 auth.py 并总结结构
 第 3 步: 读取 api.py 并总结结构
@@ -113,42 +113,42 @@ Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原�
 ### 方式 A：`npx skills add`（推荐，一条命令）
 
 ```bash
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator
+npx skills add https://github.com/clear2x/cc-workflows
 ```
 
-会自动将 `skills/claude-workflow-orchestrator/` 文件夹复制到本地技能目录。
+会自动将 `skills/cc-workflows/` 文件夹复制到本地技能目录。
 
 安装单个 skill（按 install name）：
 
 ```bash
-npx skills add https://github.com/clear2x/claude-workflow-orchestrator --skill "claude-workflow-orchestrator"
+npx skills add https://github.com/clear2x/cc-workflows --skill "cc-workflows"
 ```
 
 ### 方式 B：`install.py`
 
 ```bash
-git clone https://github.com/clear2x/claude-workflow-orchestrator.git
-cd claude-workflow-orchestrator
+git clone https://github.com/clear2x/cc-workflows.git
+cd cc-workflows
 python3 install.py
 ```
 
 安装位置：
-- `~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py` — Hermes Agent 用
-- `~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
+- `~/.hermes/skills/cc-workflows/claude_orchestrator.py` — Hermes Agent 用
+- `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
 
 ### 方式 C：手动复制
 
 ```bash
 # Claude Code 项目级
-mkdir -p .claude/skills/claude-workflow-orchestrator
-cp skills/claude-workflow-orchestrator/claude_orchestrator.py .claude/skills/claude-workflow-orchestrator/
-cp skills/claude-workflow-orchestrator/SKILL.md .claude/skills/claude-workflow-orchestrator/
+mkdir -p .claude/skills/cc-workflows
+cp skills/cc-workflows/claude_orchestrator.py .claude/skills/cc-workflows/
+cp skills/cc-workflows/SKILL.md .claude/skills/cc-workflows/
 ```
 
 ```bash
 # Hermes Agent 全局
-mkdir -p ~/.hermes/skills/claude-workflow-orchestrator
-cp skills/claude-workflow-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-workflow-orchestrator/
+mkdir -p ~/.hermes/skills/cc-workflows
+cp skills/cc-workflows/claude_orchestrator.py ~/.hermes/skills/cc-workflows/
 ```
 
 ## 12 种执行模式

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Install claude-workflow-orchestrator for Claude Code and Hermes Agent."""
+"""Install cc-workflows for Claude Code and Hermes Agent."""
 import shutil
 import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).parent.resolve()
-SKILL_DIR = REPO_DIR / "skills" / "claude-workflow-orchestrator"
+SKILL_DIR = REPO_DIR / "skills" / "cc-workflows"
 SCRIPT = SKILL_DIR / "claude_orchestrator.py"
 SKILL_MD = SKILL_DIR / "SKILL.md"
-TARGET_HERMES = Path.home() / ".hermes" / "skills" / "claude-workflow-orchestrator" / "claude_orchestrator.py"
-TARGET_CC = Path.home() / ".claude" / "skills" / "claude-workflow-orchestrator" / "claude_orchestrator.py"
+TARGET_HERMES = Path.home() / ".hermes" / "skills" / "cc-workflows" / "claude_orchestrator.py"
+TARGET_CC = Path.home() / ".claude" / "skills" / "cc-workflows" / "claude_orchestrator.py"
 
 def install():
     if not SCRIPT.exists():

@@ -1,5 +1,5 @@
 ---
-name: claude-workflow-orchestrator
+name: cc-workflows
 description: >
   多 Agent 动态工作流调度器。基于 claude -p 实现：单 agent 执行、多 agent 流水线、
   条件分支、并行派发、长任务自动循环（最多 100 段）。当用户提到"长时间跑"、
@@ -12,8 +12,8 @@ version: 1.1.0
 
 本 skill 提供 6 种模式的动态工作流调度，全部基于 `claude -p` 实现。
 
-脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py`
-脚本路径（Claude Code 用户级）：`~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py`
+脚本路径（Hermes 全局）：`/Users/clear2x/.hermes/skills/cc-workflows/claude_orchestrator.py`
+脚本路径（Claude Code 用户级）：`~/.claude/skills/cc-workflows/claude_orchestrator.py`
 脚本路径（项目级）：`.claude/scripts/claude_orchestrator.py`
 支持文件：`references/output-parsing.md`（JSON 输出解析参考）
 `references/test-project-verify.md`（test_project 全模式验证记录）
@@ -36,7 +36,7 @@ Claude Code 的 `--output-format json` 输出中，`result.result` 字段经常�
 ### 模式 1: 查看可用 agent
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py agents
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py agents
 ```
 
 从 system init 事件读取，不依赖模型输出，30 秒超时。
@@ -44,8 +44,8 @@ python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py age
 ### 模式 2: 单 agent 执行
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run "任务描述" --agent Explore
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-flash
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "任务描述" --agent Explore
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-flash
 ```
 
 支持 agent：`Explore`, `Plan`, `general-purpose`, `claude`, `search-agent` 等。
@@ -54,7 +54,7 @@ python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run
 ### 模式 3: 多 agent 流水线（顺序执行）
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
   --step "探索:列出所有 .py 文件" --agent Explore \
   --step "分析:评估复杂度" --agent general-purpose \
   --step "规划:给出重构方案" --agent Plan
@@ -65,7 +65,7 @@ python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py pip
 ### 模式 4: 条件分支
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py pipeline \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py pipeline \
   --step "扫描:找出所有安全问题" --agent Explore \
   --step "判断:统计高危问题数" --agent general-purpose \
   --step "修复:生成修复方案（满足条件时执行）" --agent general-purpose \
@@ -109,16 +109,16 @@ Worktree 实现细节：
 
 ```bash
 # 每行一步，自动分段执行
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop "Step 1: list files
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: list files
 Step 2: read calculator.py
 Step 3: read logger.py
 Step 4: report findings"
 
 # 指定最多 50 段
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop "Step 1: ..." --max-steps 50
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: ..." --max-steps 50
 
 # 指定 agent
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop "Step 1: ..." --max-steps 100 --agent Explore
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop "Step 1: ..." --max-steps 100 --agent Explore
 ```
 
 自动循环行为：
@@ -151,7 +151,7 @@ Step 4: report" --max-steps 2
 ### 查看会话状态
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py sessions
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py sessions
 ```
 
 ## 关键规则
@@ -176,7 +176,7 @@ Claude Code 会自动加载 `~/.claude/skills/` 下的技能（通过 `SKILL.md`
 
 在项目目录下启动 `claude`，直接对 Claude 说需求，例如：
 
-> 用 claude-workflow-orchestrator loop 重构 src/，最多 50 步
+> 用 cc-workflows loop 重构 src/，最多 50 步
 
 > 并行分析这三个文件：a.py, b.py, c.py
 
@@ -198,20 +198,20 @@ Claude 会读取 skill 文档，**直接通过 terminal 工具执行命令**，�
 Claude Code 用户级路径必须包含 `SKILL.md`：
 
 ```
-~/.claude/skills/claude-workflow-orchestrator/
+~/.claude/skills/cc-workflows/
 ├── SKILL.md          ← 必须存在，否则 Claude Code 不会加载此 skill
 └── claude_orchestrator.py
 ```
 
-如果 `~/.claude/skills/claude-workflow-orchestrator/` 下没有 `SKILL.md`，需要手动复制 Hermes 全局版本的 `SKILL.md` 过去。
+如果 `~/.claude/skills/cc-workflows/` 下没有 `SKILL.md`，需要手动复制 Hermes 全局版本的 `SKILL.md` 过去。
 
 ## 安装位置
 
 | 作用域 | 路径 | 说明 |
 |--------|------|------|
-| Hermes 全局 | `/Users/clear2x/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py` | Hermes Agent 使用 |
-| Claude Code 用户级 | `~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py` + `SKILL.md` | Claude Code 自动加载 |
-| 项目级 | `.claude/skills/claude-workflow-orchestrator/SKILL.md`（文档）+ 脚本软链接 | 项目共享 |
+| Hermes 全局 | `/Users/clear2x/.hermes/skills/cc-workflows/claude_orchestrator.py` | Hermes Agent 使用 |
+| Claude Code 用户级 | `~/.claude/skills/cc-workflows/claude_orchestrator.py` + `SKILL.md` | Claude Code 自动加载 |
+| 项目级 | `.claude/skills/cc-workflows/SKILL.md`（文档）+ 脚本软链接 | 项目共享 |
 
 Claude Code 会自动加载 `~/.claude/skills/` 下包含 `SKILL.md` 的技能。
 
@@ -233,7 +233,7 @@ Superpowers（obra/superpowers）是一套编码代理的开发方法论，包�
 **方案 A：orchestrator 注入 Superpowers 约束到 agent prompt**
 
 ```bash
-python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/cc-workflows/claude_orchestrator.py loop \
   "重构 src/calculator.py，遵循 TDD：先写失败测试，再写代码，再重构" \
   --max-steps 100 \
   --agent general-purpose
@@ -245,11 +245,11 @@ python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loo
 
 > 用 Superpowers 的 subagent-driven-development 重构 src/，每步跑测试，最多 100 段
 
-Claude 会自动加载 Superpowers 的 `writing-plans`、`subagent-driven-development`、`test-driven-development` 等 skill，同时 `claude-workflow-orchestrator` 会被触发用于长任务循环。
+Claude 会自动加载 Superpowers 的 `writing-plans`、`subagent-driven-development`、`test-driven-development` 等 skill，同时 `cc-workflows` 会被触发用于长任务循环。
 
 ### 推荐组合
 
-| Superpowers skill | claude-workflow-orchestrator 模式 | 用途 |
+| Superpowers skill | cc-workflows 模式 | 用途 |
 |-------------------|--------------------------|------|
 | `brainstorming` | `run` | 设计阶段探索方案 |
 | `writing-plans` | `pipeline` | 将设计拆成实施计划 |
@@ -259,13 +259,13 @@ Claude 会自动加载 Superpowers 的 `writing-plans`、`subagent-driven-develo
 
 ## 集成 Superpowers
 
-`claude-workflow-orchestrator` 已内置 Superpowers 工作流约束自动注入。loop 模式下，每段会根据关键词自动注入对应 skill 的规范（TDD、writing-plans、subagent-driven-development 等）。
+`cc-workflows` 已内置 Superpowers 工作流约束自动注入。loop 模式下，每段会根据关键词自动注入对应 skill 的规范（TDD、writing-plans、subagent-driven-development 等）。
 
 详见：`references/superpowers-integration.md`
 
 ## 注意事项
 
-- 脚本路径：`~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py`
+- 脚本路径：`~/.hermes/skills/cc-workflows/claude_orchestrator.py`
 - 状态文件：`/tmp/claude_orchestrator_state.json`，重启不丢失
 - 工作目录：自动检测 git root，失败则回退到当前执行目录。**不再硬编码单一项目路径**
 - 如果 `run` 或 `resume` 报错，先查看错误信息，再决定是否重试
