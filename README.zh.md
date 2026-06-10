@@ -41,6 +41,7 @@
 - [CLI 参考](#cli-参考)
 - [高级功能](#高级功能)
 - [Superpowers 集成](#superpowers-集成)
+- [最佳实践：cc-workflows × Superpowers](#最佳实践cc-workflows--superpowers)
 - [输出解析](#输出解析)
 - [故障排查](#故障排查)
 - [开源协议](#开源协议)
@@ -196,6 +197,11 @@ cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 
 不调用模型，30 秒内从 system init 事件读取所有可用 agent。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows 帮我看看有哪些可用的 agent
+```
+
 ```bash
 python3 cc_workflows.py agents
 ```
@@ -212,6 +218,14 @@ python3 cc_workflows.py agents
 ### `run`：单 agent 执行
 
 执行单个 prompt，支持指定 agent 和 model。再次执行时自动续接上次会话。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows 的 run 模式，让 Explore agent 读一下 calculator.py 并总结功能
+
+（续接上次会话）
+> 再让它在刚才的基础上给 calculator.py 加上取模和幂运算
+```
 
 ```bash
 python3 cc_workflows.py run "任务描述" --agent Explore
@@ -230,6 +244,11 @@ python3 cc_workflows.py run "任务描述" --agent Plan --model step-3.7-flash
 
 每一步可使用不同 agent，session 自动续接。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows pipeline 跑 3 步流水线：第1步扫描所有 .py 文件，第2步分析代码质量，第3步给出改进建议
+```
+
 ```bash
 python3 cc_workflows.py pipeline \
   --step "Explore: 列出 src/ 下所有 .py 文件" --agent Explore \
@@ -240,6 +259,11 @@ python3 cc_workflows.py pipeline \
 ### `branch`：条件分支
 
 在指定步骤评估条件，根据结果跳转到 `--then-step` 或 `--else-step`。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows 的 branch 模式：扫描有没有包含 TODO 注释的文件，有的话列出具体位置，没有的话说"无待办"
+```
 
 ```bash
 python3 cc_workflows.py branch \
@@ -260,6 +284,11 @@ python3 cc_workflows.py branch \
 ### `parallel`：并行派发
 
 最多 8 个任务同时执行，每个任务拥有独立的 session 和 **git worktree 隔离**。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows 并行分析 3 个文件：calculator.py 的功能、logger.py 的功能、README.md 的内容
+```
 
 ```bash
 python3 cc_workflows.py parallel \
@@ -295,6 +324,14 @@ Worktree 行为控制：
 
 将 prompt 按换行拆成独立步骤，每步执行一次，自动续接。中断后重新运行会从上次停止的步骤继续。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows loop 分 4 步执行：第1步列出所有文件，第2步读取 calculator.py，第3步读取 logger.py，第4步总结项目
+
+（断点续接）
+> 用 cc-workflows loop 跑 4 步任务，先限制只跑 2 步，然后再续接跑完
+```
+
 ```bash
 python3 cc_workflows.py loop \
   "第 1 步: 列出所有 Python 文件
@@ -321,6 +358,11 @@ python3 cc_workflows.py loop "..." --max-steps 2
 
 ### `sessions`：查看会话状态
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows 查看当前活跃的会话状态
+```
+
 ```bash
 python3 cc_workflows.py sessions
 ```
@@ -332,6 +374,11 @@ python3 cc_workflows.py sessions
 ### `classify`（Classify-and-act）
 
 先用一个 classifier agent 对任务进行分类，再根据分类结果路由到不同的 agent/行为。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows classify 来分类这个任务："calculator.py 的 divide 函数除以零会怎样"，按 security 和 performance 分类处理
+```
 
 ```bash
 python3 cc_workflows.py classify \
@@ -351,6 +398,11 @@ python3 cc_workflows.py classify \
 
 将任务拆分为多个小步骤，每个步骤由独立的 agent 并发执行，最后汇总所有结果。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows fanout 并行做 3 件事：审查 calculator.py 的安全性、审查 logger.py 的可扩展性、检查 README.md 是否完整，然后汇总成一份综合报告
+```
+
 ```bash
 python3 cc_workflows.py fanout \
   "Analyze the codebase for security issues" \
@@ -369,6 +421,11 @@ python3 cc_workflows.py fanout \
 ### `verify`（Adversarial verification）
 
 执行任务，然后由独立的 verifier agent 根据 rubric 对抗式地检查输出质量，不合格则自动修复，循环至通过或达到最大轮数。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows verify 让它给 calculator.py 补充单元测试，验证标准是：覆盖加减乘除、有边界测试、有异常处理，最多验证 2 轮
+```
 
 ```bash
 python3 cc_workflows.py verify \
@@ -392,6 +449,11 @@ python3 cc_workflows.py verify \
 
 生成 N 个方案，再用 rubric 进行评分筛选，只返回质量最高的 K 个候选。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows genfilter 给这个项目起 3 个名字，标准是简短好记体现功能，筛出最好的 1 个
+```
+
 ```bash
 python3 cc_workflows.py genfilter \
   "Generate 5 creative names for a CLI tool that manages dotfiles" \
@@ -410,6 +472,11 @@ python3 cc_workflows.py genfilter \
 
 N 个 agent 使用不同方法竞争同一个任务，由 judge agent pairwise 评比选出最终赢家。
 
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows tournament 让 3 个选手竞争"用最优雅的方式给 calculator.py 加上历史记录功能"，judge 按代码简洁性、可维护性、完整性评分
+```
+
 ```bash
 python3 cc_workflows.py tournament \
   "Implement a thread-safe LRU cache in Python" \
@@ -426,6 +493,11 @@ python3 cc_workflows.py tournament \
 ### `loop_until`（Loop until done）
 
 对工作量不确定的任务，循环执行直到满足停止条件（而非固定次数）。
+
+```
+💬 在 Claude Code 中：
+> 用 cc-workflows loop_until 让它给 calculator.py 添加功能，每轮加一个，直到包含了 sqrt、abs、round 三个函数为止，最多试 5 轮
+```
 
 ```bash
 python3 cc_workflows.py loop_until \
@@ -553,6 +625,168 @@ python3 cc_workflows.py loop \
 /plugin marketplace add obra/superpowers-marketplace
 /plugin install superpowers@superpowers-marketplace
 ```
+
+## 最佳实践：cc-workflows × Superpowers
+
+### 核心理解：分工与互补
+
+| 维度 | Superpowers | cc-workflows |
+|------|-------------|-------------|
+| **角色** | 方法论（做什么、怎么做才对） | 执行引擎（怎么跑、怎么调度） |
+| **关注点** | TDD 红绿循环、review 质量、计划规范 | 多 agent 并行、断点续接、长任务编排 |
+| **执行环境** | Claude Code 主会话内（Agent tool / 子代理） | `claude -p` 子进程（独立 session） |
+| **上下文** | 继承主会话，可交互式追问 | 隔离上下文，一次性 prompt |
+
+**关键原则：Superpowers 决定"做什么"，cc-workflows 决定"怎么跑"。**
+
+### 最佳实践一：对话内自然语言触发（推荐）
+
+在 Claude Code 对话里，**不需要手动拼命令**。用自然语言描述需求，Claude 会自动：
+1. 加载相关 superpowers skill（brainstorming → writing-plans → subagent-driven-development）
+2. 选择合适的 cc-workflows 模式执行
+
+**典型对话流程：**
+
+```
+你：我想给 auth 模块加 OAuth2 支持
+
+Claude：
+  → 自动触发 brainstorming skill
+  → 逐个问题澄清需求
+  → 提出 2-3 种方案
+  → 你确认后写 spec
+  → 触发 writing-plans skill
+  → 生成详细的分步计划
+  → 询问执行方式
+
+你：用 subagent-driven-development 执行
+
+Claude：
+  → 自动触发 subagent-driven-development skill
+  → 每个任务派独立子代理
+  → spec review → code quality review
+  → 所有任务完成后用 finishing-a-development-branch 收尾
+```
+
+**这个流程全程在对话内完成，不需要手动调 cc-workflows 命令。** Superpowers 的子代理机制已经内置了并行和隔离。
+
+### 最佳实践二：长任务用 cc-workflows `loop` 跑 Superpowers 约束
+
+当任务**超过 12 轮工具调用**或**需要 20+ 步**时，主会话上下文会溢出。这时用 cc-workflows loop：
+
+```bash
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py loop \
+  "Step 1: 用 TDD 方式为 auth.py 写 OAuth2 的失败测试
+Step 2: 实现最小代码让测试通过
+Step 3: 重构，提取公共逻辑
+Step 4: 用 TDD 为 token 刷新写失败测试
+Step 5: 实现刷新逻辑
+Step 6: 运行全量测试确认无回归
+Step 7: 提交代码" \
+  --max-steps 50
+```
+
+**为什么这有效：**
+- loop 模式会自动检测关键词（如 `TDD`、`测试`）并注入 superpowers 约束
+- 每段执行完靠 `--resume` 清空上下文，避免溢出
+- 支持断点续接，中断后重跑同一命令自动继续
+
+### 最佳实践三：并行探索用 cc-workflows `parallel` + Explore agent
+
+当需要**同时分析多个独立子系统**时：
+
+```bash
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py parallel \
+  --task "审查 auth.py 的安全性：检查 SQL 注入、XSS、权限绕过" --agent Explore --name security \
+  --task "分析 api.py 的性能瓶颈：N+1 查询、缺少缓存、慢查询" --agent Explore --name perf \
+  --task "检查 db.py 的数据完整性：约束缺失、竞态条件、迁移问题" --agent Explore --name data
+```
+
+**适用场景：**
+- 代码审查（安全/性能/可维护性多维度并行）
+- 多文件独立重构
+- 多模块同时调试
+
+**不适用场景：**
+- 任务之间有依赖（改 A 会影响 B）
+- 需要全局理解（一个 agent 看不全貌）
+
+### 最佳实践四：验证闭环用 cc-workflows `verify`
+
+**先实现，再对抗验证**——对应 superpowers 的 `verification-before-completion` 理念：
+
+```bash
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py verify \
+  "实现一个 JWT 中间件，支持 token 验证、刷新、黑名单" \
+  --rubric "1. 必须有单元测试覆盖正常和异常路径
+            2. 必须验证 token 过期
+            3. 必须处理畸形 token
+            4. 必须遵循项目风格（black, type hints）" \
+  --max-rounds 3
+```
+
+**这等价于 superpowers 的 spec review + code quality review，但是通过 cc-workflows 的 `claude -p` 隔离执行。**
+
+### 最佳实践五：方案选优用 `tournament` / `genfilter`
+
+**多方案竞争**（对应 superpowers brainstorming 的"提出 2-3 种方案"）：
+
+```bash
+# tournament：N 个选手竞争，judge 选赢家
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py tournament \
+  "实现一个线程安全的 LRU 缓存" \
+  --contestants 3 \
+  --judge "最优标准：线程安全正确、O(1) 读写、代码简洁、测试充分"
+
+# genfilter：生成 N 个方案，按 rubric 筛选最好的 K 个
+python3 ~/.hermes/skills/cc-workflows/cc_workflows.py genfilter \
+  "为 REST API 设计错误处理方案" \
+  --count 3 --rubric "统一格式、包含错误码、支持国际化" --filter-top 1
+```
+
+### 决策树：什么时候用哪个
+
+```
+有需求？
+├─ 需求不明确 → Superpowers brainstorming（对话内）
+├─ 需求明确，要规划 → Superpowers writing-plans（对话内）
+├─ 有计划，要执行
+│   ├─ 任务 < 12 轮 → Superpowers subagent-driven-development（对话内 Agent tool）
+│   ├─ 任务 > 12 轮 → cc-workflows loop（后台跑）
+│   ├─ 多任务并行 → cc-workflows parallel 或 fanout
+│   └─ 需要验证 → cc-workflows verify
+├─ 方案选优 → cc-workflows tournament 或 genfilter
+├─ 循环直到完成 → cc-workflows loop_until
+└─ 不确定走哪条路 → cc-workflows classify
+```
+
+### 推荐组合速查表
+
+| 场景 | Superpowers Skill | cc-workflows 模式 | 触发方式 |
+|------|------------------|-------------------|---------|
+| 探索需求 | brainstorming | — | 对话内自然语言 |
+| 制定计划 | writing-plans | — | 对话内自然语言 |
+| 小任务实现 | subagent-driven-development | — | 对话内或 `/cc-run` |
+| 长任务 TDD | test-driven-development | `loop` | `/cc-loop` + TDD 关键词自动注入 |
+| 多文件并行分析 | dispatching-parallel-agents | `parallel` | `/cc-parallel` |
+| 并行+汇总 | — | `fanout` | `/cc-fanout` |
+| 实现后验证 | verification-before-completion | `verify` | `/cc-verify` |
+| 条件执行 | — | `branch` | `/cc-branch` |
+| 方案竞争 | brainstorming（提出方案阶段） | `tournament` | `/cc-tournament` |
+| 循环直到达标 | — | `loop_until` | `/cc-loop-until` |
+| 任务分类路由 | — | `classify` | `/cc-classify` |
+| 代码审查 | requesting-code-review | `pipeline` | `/cc-pipeline` |
+
+### 常见陷阱
+
+| 陷阱 | 正确做法 |
+|------|---------|
+| 在 cc-workflows 里用 `--interactive` | ❌ Claude Code 子进程无 TTY，会 EOFError。需求澄清在对话内完成 |
+| 信任 agent 的 "success" 报告 | ❌ 用 superpowers verification-before-completion：跑测试、看输出、再下结论 |
+| 一个大 prompt 塞进 loop | ❌ 每段 prompt 控制在 2000 字以内，拆成更多段 |
+| 主会话跑长任务直到上下文溢出 | ❌ 超过 20 步就切到 cc-workflows loop，靠 resume 管理上下文 |
+| parallel 任务之间有依赖 | ❌ 只对独立任务用 parallel，有依赖的用 pipeline |
+| 跳过 review | ❌ superpowers 要求 spec review + code quality review，不可省略 |
 
 ### 输出解析
 
