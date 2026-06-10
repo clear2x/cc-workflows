@@ -504,7 +504,7 @@ def cmd_parallel(tasks: list):
 
     results = []
     WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
-    with ThreadPoolExecutor(max_workers=min(len(tasks), 8)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(len(tasks), 8))) as executor:
         futures = {executor.submit(_run_single_task, t, str(WORKTREE_BASE)): t for t in tasks}
         for future in as_completed(futures):
             try:
@@ -1115,7 +1115,7 @@ def cmd_fanout(main_prompt: str, subtasks: list, synthesize_prompt: str = "", ag
 
     # Fan-out 阶段
     fanout_results = []
-    with ThreadPoolExecutor(max_workers=min(len(subtasks), 8)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(len(subtasks), 8))) as executor:
         futures = {
             executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
             for t in subtasks
@@ -1271,7 +1271,7 @@ Produce a complete, independent solution. Be creative and thorough."""
 
     WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
     gen_results = []
-    with ThreadPoolExecutor(max_workers=min(count, 8)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(count, 8))) as executor:
         futures = {
             executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
             for t in generation_tasks
@@ -1388,7 +1388,7 @@ Produce your best complete solution following your approach. Be thorough."""
 
     WORKTREE_BASE.mkdir(parents=True, exist_ok=True)
     contest_results = []
-    with ThreadPoolExecutor(max_workers=min(contestants, 8)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(contestants, 8))) as executor:
         futures = {
             executor.submit(_fanout_subtask, t, str(WORKTREE_BASE)): t
             for t in contest_tasks
