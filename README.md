@@ -1,4 +1,4 @@
-# Claude Orchestrator
+# Claude Workflow Orchestrator
 
 <div align="center">
 
@@ -6,7 +6,7 @@
 ![Claude Code](https://img.shields.io/badge/Claude_Code-v2.1.168%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-**A professional multi-agent workflow orchestrator for Claude Code.**
+**A professional 12-mode multi-agent workflow orchestrator for Claude Code.**
 
 </div>
 
@@ -19,15 +19,14 @@
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
-- [6 Execution Primitives](#6-execution-primitives)
-  - [Mode 1 — `agents`](#mode-1--agents)
-  - [Mode 2 — `run`](#mode-2--run)
-  - [Mode 3 — `pipeline`](#mode-3--pipeline)
-  - [Mode 4 — `branch`](#mode-4--branch)
-  - [Mode 5 — `parallel`](#mode-5--parallel)
-  - [Mode 6 — `loop`](#mode-6--loop)
+- [12 Execution Modes](#12-execution-modes)
+  - [Primitive 1 — `agents`](#primitive-1--agents)
+  - [Primitive 2 — `run`](#primitive-2--run)
+  - [Primitive 3 — `pipeline`](#primitive-3--pipeline)
+  - [Primitive 4 — `branch`](#primitive-4--branch)
+  - [Primitive 5 — `parallel`](#primitive-5--parallel)
+  - [Primitive 6 — `loop`](#primitive-6--loop)
   - [`sessions`](#sessions)
-- [6 Official Workflow Patterns](#6-official-workflow-patterns)
   - [Pattern 1 — `classify`](#pattern-1--classify)
   - [Pattern 2 — `fanout`](#pattern-2--fanout)
   - [Pattern 3 — `verify`](#pattern-3--verify)
@@ -46,9 +45,9 @@
 <a name="english"></a>
 ## Overview
 
-Claude Orchestrator is a **production-grade** Python wrapper around `claude -p` (Claude Code's non-interactive headless mode). It turns one-off prompts into **repeatable, resumable, observable** workflows — without leaving your terminal.
+Claude Workflow Orchestrator is a **production-grade** Python wrapper around `claude -p` (Claude Code's non-interactive headless mode). It turns one-off prompts into **repeatable, resumable, observable** workflows — without leaving your terminal.
 
-### Execution Modes
+### 12 Execution Modes
 
 | Mode | Description |
 |------|-------------|
@@ -69,18 +68,18 @@ Claude Orchestrator is a **production-grade** Python wrapper around `claude -p` 
 
 ```bash
 # 1. Install (one-line)
-npx skills add https://github.com/clear2x/claude-orchestrator
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator
 
 # 2. Verify agents available
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py agents
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py agents
 
 # 3. Run a single task
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py run \
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run \
   "Refactor auth.py, add type hints" \
   --agent general-purpose
 
 # 4. Long multi-step task (auto-resumes on re-run)
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop \
   "Step 1: list Python files
 Step 2: read calculator.py and summarize
 Step 3: read logger.py and summarize
@@ -92,7 +91,7 @@ Step 4: write a refactor plan" \
 
 Claude Code's official [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) let Claude **write and orchestrate its own JavaScript harness** on the fly. That system exposes 6 workflow **design patterns** (Classify-and-act, Fan-out-and-synthesize, Adversarial verification, Generate-and-filter, Tournament, Loop until done) that Claude composes as JS code inside a workflow file.
 
-Claude Orchestrator takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
+Claude Workflow Orchestrator takes a different approach: it provides 6 CLI **execution primitives** — fixed, opinionated command modes that wrap `claude -p` and handle orchestration concerns (worktrees, state, resume, Superpowers injection) so you don't have to write any JS.
 
 | Official pattern | Closest Orchestrator mode | Notes |
 |------------------|---------------------------|-------|
@@ -103,54 +102,54 @@ Claude Orchestrator takes a different approach: it provides 6 CLI **execution pr
 | Tournament | `parallel` | Spawn N agents on the same task, then judge results |
 | Loop until done | `loop` | Segmented loop with stop condition (max-steps acts as budget) |
 
-In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; Claude Orchestrator is **user-invoked, CLI-driven, and convention-based**. Use Orchestrator when you want predictable, reusable, shareable commands without writing workflow JS.
+In short: official dynamic workflows are **Claude-authored, JS-based, and flexible**; Claude Workflow Orchestrator is **user-invoked, CLI-driven, and convention-based**. Use Orchestrator when you want predictable, reusable, shareable commands without writing workflow JS.
 
 ## Installation
 
 ### Option A: `npx skills add` (recommended)
 
 ```bash
-npx skills add https://github.com/clear2x/claude-orchestrator
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator
 ```
 
-This copies the `skills/claude-orchestrator/` folder into your local skills directory automatically.
+This copies the `skills/claude-workflow-orchestrator/` folder into your local skills directory automatically.
 
 Install a single skill by install name:
 
 ```bash
-npx skills add https://github.com/clear2x/claude-orchestrator --skill "claude-orchestrator"
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator --skill "claude-workflow-orchestrator"
 ```
 
 ### Option B: `install.py`
 
 ```bash
-git clone https://github.com/clear2x/claude-orchestrator.git
-cd claude-orchestrator
+git clone https://github.com/clear2x/claude-workflow-orchestrator.git
+cd claude-workflow-orchestrator
 python3 install.py
 ```
 
 Copies the script to:
-- `~/.hermes/skills/claude-orchestrator/claude_orchestrator.py` — Hermes Agent
-- `~/.claude/skills/claude-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code
+- `~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py` — Hermes Agent
+- `~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code
 
 ### Option C: Manual copy
 
 ```bash
 # Claude Code project-level
-mkdir -p .claude/skills/claude-orchestrator
-cp skills/claude-orchestrator/claude_orchestrator.py .claude/skills/claude-orchestrator/
-cp skills/claude-orchestrator/SKILL.md .claude/skills/claude-orchestrator/
+mkdir -p .claude/skills/claude-workflow-orchestrator
+cp skills/claude-workflow-orchestrator/claude_orchestrator.py .claude/skills/claude-workflow-orchestrator/
+cp skills/claude-workflow-orchestrator/SKILL.md .claude/skills/claude-workflow-orchestrator/
 ```
 
 ```bash
 # Hermes Agent global
-mkdir -p ~/.hermes/skills/claude-orchestrator
-cp skills/claude-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
+mkdir -p ~/.hermes/skills/claude-workflow-orchestrator
+cp skills/claude-workflow-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-workflow-orchestrator/
 ```
 
-## 6 Execution Modes
+## 12 Execution Modes
 
-### Mode 1 — `agents`
+### Primitive 1 — `agents`
 
 List all available Claude Code agents without invoking a model.
 
@@ -167,7 +166,7 @@ python3 claude_orchestrator.py agents
   ...
 ```
 
-### Mode 2 — `run`
+### Primitive 2 — `run`
 
 Execute a single prompt with an optional agent, auto-resuming from the last session on re-run.
 
@@ -184,7 +183,7 @@ Output includes per-run metadata:
 <output>
 ```
 
-### Mode 3 — `pipeline`
+### Primitive 3 — `pipeline`
 
 Run multiple steps **sequentially**, each step can use a different agent. Session is carried forward automatically.
 
@@ -195,7 +194,7 @@ python3 claude_orchestrator.py pipeline \
   --step "Plan: produce a refactor plan" --agent Plan
 ```
 
-### Mode 4 — `branch`
+### Primitive 4 — `branch`
 
 Sequential pipeline with **conditional branching**. After a designated evaluation step, the orchestrator jumps to either the `--then-step` or the `--else-step`.
 
@@ -215,7 +214,7 @@ Supported condition syntax:
 | Numeric comparison | `bugs_found > 0`, `count >= 5`, `severity == 3` |
 | String contains | `output contains 'PASS'`, `result contains 'error'` |
 
-### Mode 5 — `parallel`
+### Primitive 5 — `parallel`
 
 Run multiple tasks **concurrently** (up to 8 workers). Each task gets its own session and an isolated **git worktree** under `/tmp/orchestrator-worktrees/orchestrator-<name>`. By default the script **auto-merges** each branch back and cleans the worktree when the task finishes.
 
@@ -254,7 +253,7 @@ Worktree flags:
 | `--keep-worktree` | Skip merge & cleanup; worktree kept at `/tmp/orchestrator-worktrees/orchestrator-<name>` |
 | `--no-worktree` | Disable isolation; all tasks run directly in the shared project directory |
 
-### Mode 6 — `loop`
+### Primitive 6 — `loop`
 
 Split a multi-line prompt into independent steps. Execute them one by one, saving state after each step so you can **interrupt and resume**.
 

@@ -1,4 +1,4 @@
-# Claude Orchestrator
+# Claude Workflow Orchestrator
 
 <div align="center">
 
@@ -48,7 +48,7 @@
 
 Claude Orchestrator 是一个**生产级**的 Python 封装，底层调用 `claude -p`（Claude Code 的非交互无头模式）。它将一次性 prompt 转化为**可重复执行、断点续接、可观测**的工作流，全程在终端完成。
 
-### 执行模式一览
+### 12 种执行模式一览
 
 | 模式 | 说明 |
 |------|------|
@@ -63,18 +63,18 @@ Claude Orchestrator 是一个**生产级**的 Python 封装，底层调用 `clau
 
 ```bash
 # 1. 安装（一条命令）
-npx skills add https://github.com/clear2x/claude-orchestrator
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator
 
 # 2. 验证可用 agent
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py agents
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py agents
 
 # 3. 单任务执行
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py run \
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py run \
   "重构 auth.py，添加类型提示" \
   --agent general-purpose
 
 # 4. 长任务分段执行（自动断点续接）
-python3 ~/.hermes/skills/claude-orchestrator/claude_orchestrator.py loop \
+python3 ~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py loop \
   "第 1 步: 列出 src/ 下所有 .py 文件
 第 2 步: 读取 auth.py 并总结结构
 第 3 步: 读取 api.py 并总结结构
@@ -113,47 +113,47 @@ Claude Orchestrator 走的是另一条路线：它提供 6 个 CLI **执行原�
 ### 方式 A：`npx skills add`（推荐，一条命令）
 
 ```bash
-npx skills add https://github.com/clear2x/claude-orchestrator
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator
 ```
 
-会自动将 `skills/claude-orchestrator/` 文件夹复制到本地技能目录。
+会自动将 `skills/claude-workflow-orchestrator/` 文件夹复制到本地技能目录。
 
 安装单个 skill（按 install name）：
 
 ```bash
-npx skills add https://github.com/clear2x/claude-orchestrator --skill "claude-orchestrator"
+npx skills add https://github.com/clear2x/claude-workflow-orchestrator --skill "claude-workflow-orchestrator"
 ```
 
 ### 方式 B：`install.py`
 
 ```bash
-git clone https://github.com/clear2x/claude-orchestrator.git
-cd claude-orchestrator
+git clone https://github.com/clear2x/claude-workflow-orchestrator.git
+cd claude-workflow-orchestrator
 python3 install.py
 ```
 
 安装位置：
-- `~/.hermes/skills/claude-orchestrator/claude_orchestrator.py` — Hermes Agent 用
-- `~/.claude/skills/claude-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
+- `~/.hermes/skills/claude-workflow-orchestrator/claude_orchestrator.py` — Hermes Agent 用
+- `~/.claude/skills/claude-workflow-orchestrator/claude_orchestrator.py` + `SKILL.md` — Claude Code 用
 
 ### 方式 C：手动复制
 
 ```bash
 # Claude Code 项目级
-mkdir -p .claude/skills/claude-orchestrator
-cp skills/claude-orchestrator/claude_orchestrator.py .claude/skills/claude-orchestrator/
-cp skills/claude-orchestrator/SKILL.md .claude/skills/claude-orchestrator/
+mkdir -p .claude/skills/claude-workflow-orchestrator
+cp skills/claude-workflow-orchestrator/claude_orchestrator.py .claude/skills/claude-workflow-orchestrator/
+cp skills/claude-workflow-orchestrator/SKILL.md .claude/skills/claude-workflow-orchestrator/
 ```
 
 ```bash
 # Hermes Agent 全局
-mkdir -p ~/.hermes/skills/claude-orchestrator
-cp skills/claude-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-orchestrator/
+mkdir -p ~/.hermes/skills/claude-workflow-orchestrator
+cp skills/claude-workflow-orchestrator/claude_orchestrator.py ~/.hermes/skills/claude-workflow-orchestrator/
 ```
 
-## 6 种执行模式
+## 12 种执行模式
 
-### 模式 1 — `agents`：查看可用 agent
+### 原语 1 — `agents`：查看可用 agent
 
 不调用模型，30 秒内从 system init 事件读取所有可用 agent。
 
@@ -170,7 +170,7 @@ python3 claude_orchestrator.py agents
   ...
 ```
 
-### 模式 2 — `run`：单 agent 执行
+### 原语 2 — `run`：单 agent 执行
 
 执行单个 prompt，支持指定 agent 和 model。再次执行时自动续接上次会话。
 
@@ -187,7 +187,7 @@ python3 claude_orchestrator.py run "任务描述" --agent Plan --model step-3.7-
 <输出内容>
 ```
 
-### 模式 3 — `pipeline`：多 agent 流水线（顺序执行）
+### 原语 3 — `pipeline`：多 agent 流水线（顺序执行）
 
 每一步可使用不同 agent，session 自动续接。
 
@@ -198,7 +198,7 @@ python3 claude_orchestrator.py pipeline \
   --step "Plan: 给出重构方案" --agent Plan
 ```
 
-### 模式 4 — `branch`：条件分支
+### 原语 4 — `branch`：条件分支
 
 在指定步骤评估条件，根据结果跳转到 `--then-step` 或 `--else-step`。
 
@@ -218,7 +218,7 @@ python3 claude_orchestrator.py branch \
 | 数值比较 | `bugs_found > 0`, `count >= 5`, `severity == 3` |
 | 字符串包含 | `output contains 'PASS'`, `result contains 'error'` |
 
-### 模式 5 — `parallel`：并行派发
+### 原语 5 — `parallel`：并行派发
 
 最多 8 个任务同时执行，每个任务拥有独立的 session 和 **git worktree 隔离**。
 
@@ -252,7 +252,7 @@ Worktree 行为控制：
 | `--keep-worktree` | 跳过合并和清理，worktree 保留在 `/tmp/orchestrator-worktrees/orchestrator-<name>` |
 | `--no-worktree` | 关闭隔离，所有任务直接在共享项目目录执行 |
 
-### 模式 6 — `loop`：长任务自动循环
+### 原语 6 — `loop`：长任务自动循环
 
 将 prompt 按换行拆成独立步骤，每步执行一次，自动续接。中断后重新运行会从上次停止的步骤继续。
 
@@ -290,7 +290,7 @@ python3 claude_orchestrator.py sessions
 
 Claude Code 的官方 [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code) 暴露了 6 个 workflow **设计模式**（Classify-and-act、Fan-out-and-synthesize、Adversarial verification、Generate-and-filter、Tournament、Loop until done）。这些模式原本需要 Claude 现场编写 JavaScript 来组合；Claude Orchestrator 将它们直接实现为原生 CLI 命令，无需编写任何 JS 工作流文件。
 
-### 模式 1 — `classify`（Classify-and-act）
+### 原语 1 — `classify`（Classify-and-act）
 
 先用一个 classifier agent 对任务进行分类，再根据分类结果路由到不同的 agent/行为。
 
@@ -308,7 +308,7 @@ python3 claude_orchestrator.py classify \
 3. 执行匹配到的 action prompt（使用 `general-purpose`）
 4. 无匹配时回退到 `--default`
 
-### 模式 2 — `fanout`（Fan-out-and-synthesize）
+### 原语 2 — `fanout`（Fan-out-and-synthesize）
 
 将任务拆分为多个小步骤，每个步骤由独立的 agent 并发执行，最后汇总所有结果。
 
@@ -327,7 +327,7 @@ python3 claude_orchestrator.py fanout \
 3. 如果提供 `--synthesize`，最终 agent 会将所有结果合并为一份报告
 4. 默认自动合并并清理 worktree（`--keep-worktree` 可保留）
 
-### 模式 3 — `verify`（Adversarial verification）
+### 原语 3 — `verify`（Adversarial verification）
 
 执行任务，然后由独立的 verifier agent 根据 rubric 对抗式地检查输出质量，不合格则自动修复，循环至通过或达到最大轮数。
 
@@ -349,7 +349,7 @@ python3 claude_orchestrator.py verify \
 4. 循环最多 `--max-rounds` 次
 5. 输出最终（ hopefully verified）结果
 
-### 模式 4 — `genfilter`（Generate-and-filter）
+### 原语 4 — `genfilter`（Generate-and-filter）
 
 生成 N 个方案，再用 rubric 进行评分筛选，只返回质量最高的 K 个候选。
 
@@ -367,7 +367,7 @@ python3 claude_orchestrator.py genfilter \
 3. Judge 对每个方案打分并排序
 4. 返回 `--filter-top` 个最佳方案（含完整内容）
 
-### 模式 5 — `tournament`（Tournament）
+### 原语 5 — `tournament`（Tournament）
 
 N 个 agent 使用不同方法竞争同一个任务，由 judge agent  pairwise 评比选出最终赢家。
 
@@ -384,7 +384,7 @@ python3 claude_orchestrator.py tournament \
 3. judge agent（`Explore`）根据任务要求和 judge prompt 对全部提交进行 pairwise 评估
 4. 宣布获胜者，附上评分 breakdown
 
-### 模式 6 — `loop_until`（Loop until done）
+### 原语 6 — `loop_until`（Loop until done）
 
 对工作量不确定的任务，循环执行直到满足停止条件（而非固定次数）。
 
