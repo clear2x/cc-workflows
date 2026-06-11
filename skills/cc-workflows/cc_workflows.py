@@ -793,6 +793,8 @@ def cmd_loop(prompt: str, max_steps: int = MAX_STEPS, agent: Optional[str] = Non
     print(f"🔢 每段 {MAX_TURNS} 轮")
     print(f"{'='*60}")
 
+    executed_count = len(all_steps) - len(remaining)
+
     # 写入初始进度
     write_progress({
         "mode": "loop",
@@ -804,7 +806,6 @@ def cmd_loop(prompt: str, max_steps: int = MAX_STEPS, agent: Optional[str] = Non
         "tasks": [],
     })
 
-    executed_count = len(all_steps) - len(remaining)
     for i, step_prompt in enumerate(remaining[:max_steps]):
         current_step = executed_count + i + 1
         print(f"\n📌 Step {current_step} / {len(all_steps)}: {step_prompt[:60]}...")
@@ -1746,10 +1747,6 @@ def cmd_loop_until(task_prompt: str, stop_condition: str, max_iterations: int = 
     print(f"🔁 Loop until done: 最多 {max_iterations} 轮")
     print(f"   停止条件: {stop_condition[:80]}...")
 
-    # 写入初始进度
-    write_progress({"mode": "loop_until", "status": "running", "max_iterations": max_iterations,
-        "current_iteration": start_iter, "stop_condition": stop_condition[:80], "tasks": []})
-
     state = load_state()
     saved_iter = state.get("loop_until_iter", 0)
     saved_session = state.get("session_id")
@@ -1761,6 +1758,10 @@ def cmd_loop_until(task_prompt: str, stop_condition: str, max_iterations: int = 
     else:
         start_iter = 0
         saved_history = []
+
+    # 写入初始进度
+    write_progress({"mode": "loop_until", "status": "running", "max_iterations": max_iterations,
+        "current_iteration": start_iter, "stop_condition": stop_condition[:80], "tasks": []})
 
     session_id = saved_session
     iteration = start_iter
