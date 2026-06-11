@@ -82,10 +82,10 @@ npx skills add https://github.com/clear2x/cc-workflows
 Then open Claude Code and just talk:
 
 ```
-💬 > 用 cc-workflows 帮我看看有哪些可用的 agent
-💬 > 用 cc-workflows 重构 auth.py，添加类型提示
-💬 > 用 cc-workflows loop 重构 src/，最多 50 步
-💬 > 并行分析这三个文件：a.py, b.py, c.py
+💬 > List available agents
+💬 > Refactor auth.py and add type hints
+💬 > Run a 50-step loop to refactor src/
+💬 > Analyze these 3 files in parallel
 ```
 
 Claude will automatically pick the right mode and execute it.
@@ -98,12 +98,12 @@ You do not need to memorize mode names or command syntax. Just describe what you
 
 | What you say | Mode Claude picks |
 |---|---|
-| "帮我并行分析这3个文件" (Analyze these 3 files in parallel) | `parallel` |
-| "先扫描有没有问题，有的话修复" (Scan for issues first, fix if found) | `branch` |
-| "让3个方案竞争选出最好的" (Let 3 approaches compete, pick the best) | `tournament` |
-| "循环执行直到测试通过" (Keep looping until tests pass) | `loop_until` |
-| "生成几个方案然后筛选最好的" (Generate several options then filter for the best) | `genfilter` |
-| "先分类这个任务，再交给对应的 agent" (Classify this task, then route to the right agent) | `classify` |
+| "Analyze these 3 files in parallel" | `parallel` |
+| "Scan for issues first, fix if found" | `branch` |
+| "Let 3 approaches compete, pick the best" | `tournament` |
+| "Keep looping until tests pass" | `loop_until` |
+| "Generate several options then filter for the best" | `genfilter` |
+| "Classify this task, then route to the right agent" | `classify` |
 
 ### Slash Commands
 
@@ -190,14 +190,14 @@ cp skills/cc-workflows/cc_workflows.py ~/.hermes/skills/cc-workflows/
 List all available Claude Code agents without invoking a model.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows 帮我看看有哪些可用的 agent
+💬 In Claude Code:
+> List available agents
 ```
 
 Output:
 
 ```
-可用 Agents:
+Available Agents:
   • Explore
   • Plan
   • general-purpose
@@ -210,11 +210,11 @@ Output:
 Execute a single prompt with an optional agent, auto-resuming from the last session on re-run.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows 的 run 模式，让 Explore agent 列出当前目录的 .py 文件
+💬 In Claude Code:
+> Read calculator.py and summarize its functionality
 
-（续接上次会话）
-> 再让它在上面结果基础上统计代码总行数
+(Resume from last session)
+> Now add modulo and power operations to it
 ```
 
 Output includes per-run metadata:
@@ -230,8 +230,8 @@ Output includes per-run metadata:
 Run multiple steps **sequentially**, each step can use a different agent. Session is carried forward automatically.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows pipeline 跑 3 步：先找出最大的 .py 文件，再总结它的功能，最后给 3 条优化建议
+💬 In Claude Code:
+> Run a 3-step pipeline: find the largest .py file, summarize it, then suggest 3 optimizations
 ```
 
 ### `branch`
@@ -239,8 +239,8 @@ Run multiple steps **sequentially**, each step can use a different agent. Sessio
 Sequential pipeline with **conditional branching**. After a designated evaluation step, the orchestrator jumps to either the `--then-step` or the `--else-step`.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows 的 branch 模式：扫描有没有安全漏洞，有的话生成修复方案，没有的话记录无问题
+💬 In Claude Code:
+> Scan for security vulnerabilities — if found, generate a fix plan; if not, log "no issues"
 ```
 
 Supported condition syntax:
@@ -255,20 +255,20 @@ Supported condition syntax:
 Run multiple tasks **concurrently** (up to 8 workers). Each task gets its own session and an isolated **git worktree**. By default the script **auto-merges** each branch back and cleans the worktree when the task finishes.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows 并行分析 3 个文件：auth.py 的安全性、api.py 的性能、db.py 的结构
+💬 In Claude Code:
+> Analyze 3 files in parallel: auth.py for security, api.py for performance, db.py for structure
 ```
 
 Output:
 
 ```
-🔄 并行执行 3 个任务...
+🔄 Running 3 tasks in parallel...
   🌳 [auth] worktree: /tmp/orchestrator-worktrees/orchestrator-auth
-  🚀 [auth] 启动...
-  🔗 [auth] 已合并到当前分支
-  🧹 [auth] worktree 已清理
+  🚀 [auth] Starting...
+  🔗 [auth] Merged to current branch
+  🧹 [auth] Worktree cleaned up
 
-📊 并行结果:
+📊 Parallel results:
   ✅ [auth] 4 turns, $0.0234
   ✅ [api] 3 turns, $0.0189
   ✅ [db] 5 turns, $0.0312
@@ -287,17 +287,17 @@ Worktree flags:
 Split a multi-line prompt into independent steps. Execute them one by one, saving state after each step so you can **interrupt and resume**.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows loop 跑 4 步：列文件 → 找最大文件 → 总结功能 → 给优化建议
+💬 In Claude Code:
+> Run a 4-step loop: list files → find the largest → summarize it → suggest optimizations
 
-（断点续接）
-> 用 cc-workflows loop 跑 4 步任务，先只跑 2 步，然后再续接跑完
+(Breakpoint resume)
+> Run the same 4-step task, but limit to 2 steps first, then resume the rest
 ```
 
 Breakpoint-resume behaviour:
 
-- First run: 2 steps → ⏸️ 本次执行 2 段完成，还剩 2 步未执行
-- Second run: same prompt → 🔄 从上次中断处继续，还剩 2 步... Step 3 → Step 4
+- First run: 2 steps → ⏸️ Completed 2 segments, 2 steps remaining
+- Second run: same prompt → 🔄 Resuming from where it stopped, 2 steps remaining... Step 3 → Step 4
 
 State is stored at `/tmp/claude_orchestrator_state.json` and survives process restarts.
 
@@ -306,8 +306,8 @@ State is stored at `/tmp/claude_orchestrator_state.json` and survives process re
 Inspect active background Claude sessions and the orchestrator's own tracked state.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows 查看当前活跃的会话
+💬 In Claude Code:
+> Show active sessions
 ```
 
 ## Workflow Patterns
@@ -317,8 +317,8 @@ Inspect active background Claude sessions and the orchestrator's own tracked sta
 **Classify-and-act**: Use a classifier agent to decide the task type, then route to different agents/behaviors.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows classify 分析这段代码的风险：SELECT * FROM users WHERE id = user_input，按 security 和 performance 分类处理
+💬 In Claude Code:
+> Classify the risk in this SQL: SELECT * FROM users WHERE id = user_input — route as security or performance
 ```
 
 How it works:
@@ -332,8 +332,8 @@ How it works:
 **Fan-out-and-synthesize**: Split a task into many smaller steps, run an agent on each, then synthesize results.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows fanout 并行做 3 件事：审查 auth.py 的安全性、审查 api.py 的可扩展性、检查 README 是否完整，然后汇总成一份综合报告
+💬 In Claude Code:
+> Fan-out: review auth.py security, review api.py scalability, check README completeness — then synthesize into one report
 ```
 
 How it works:
@@ -347,8 +347,8 @@ How it works:
 **Adversarial verification**: Run a task, then spawn a separate verifier agent to adversarially check the output against a rubric. Repeat until PASS or max rounds reached.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows verify 让它写一个斐波那契函数，然后验证是否包含函数定义、边界处理、复杂度说明，最多验证 2 轮
+💬 In Claude Code:
+> Verify: write a Fibonacci function, then check it has function definition, boundary handling, and complexity note — max 2 rounds
 ```
 
 How it works:
@@ -363,8 +363,8 @@ How it works:
 **Generate-and-filter**: Generate N ideas/solutions, then filter them by a rubric, returning only the highest quality candidates.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows genfilter 为这个项目起 3 个名字，标准是简短好记有科技感，筛出最好的 1 个
+💬 In Claude Code:
+> Generate 3 creative names for this project — criteria: short, memorable, tech feel — return the best 1
 ```
 
 How it works:
@@ -378,8 +378,8 @@ How it works:
 **Tournament**: Have N agents compete on the same task using different approaches, then a judge agent picks the winner.
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows tournament 让 3 个选手竞争"用一句话向程序员解释递归"，judge 按"准确、有类比、一句话说清"评分
+💬 In Claude Code:
+> Tournament: 3 contestants compete to "explain recursion in one sentence" — judge on accuracy, clarity, brevity
 ```
 
 How it works:
@@ -393,8 +393,8 @@ How it works:
 **Loop until done**: For tasks with an unknown amount of work, loop spawning agents until a stop condition is met (instead of a fixed number of passes).
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows loop_until 让它给 calculator.py 添加功能，直到包含了 sqrt、abs、round 三个函数为止，最多试 5 轮
+💬 In Claude Code:
+> Loop until calculator.py has sqrt, abs, and round functions — max 5 iterations
 ```
 
 How it works:
@@ -447,13 +447,13 @@ CC Workflows supports **two execution forms** for real-time progress feedback, b
 When you trigger a cc-workflows pattern, Claude uses the Workflow tool to orchestrate it — you see phases and agents update in real-time:
 
 ```
-💬 > /cc-workflows parallel 并行分析这 3 个文件
+💬 > Analyze these 3 files in parallel
 
 You see in real-time:
   ▸ Parallel Analysis (3 agents)
-    ✅ agent:auth — 分析 auth.py 安全性
-    ✅ agent:api — 分析 api.py 性能
-    ✅ agent:db — 分析 db.py 结构
+    ✅ agent:auth — Analyze auth.py security
+    ✅ agent:api — Analyze api.py performance
+    ✅ agent:db — Analyze db.py structure
 ```
 
 Mode mapping:
@@ -472,15 +472,15 @@ Mode mapping:
 Use cc_workflows.py subprocess with background execution and progress file polling. **Best for:** long tasks (> 20 steps), breakpoint resume, Superpowers auto-injection, batch parallel (> 8 tasks).
 
 ```
-💬 > /cc-workflows loop 重构 auth.py，分 7 步，最多 50 步
+💬 > Refactor auth.py in 7 steps, max 50 steps
 
-Claude: 后台执行中，我会定期汇报进度。
+Claude: Running in background, I'll report progress periodically.
 
 [30s later]
-📊 进度：3/7 步 | 💰 $0.12
+📊 Progress: 3/7 steps | 💰 $0.12
 
-[task completes]
-🎉 全部 7 步完成！累计 25 轮, $0.34
+[Task completes]
+🎉 All 7 steps done! 25 total turns, $0.34
 ```
 
 #### Decision Guide
@@ -508,11 +508,11 @@ The `loop` mode inspects each step's prompt for keywords and automatically injec
 
 | Keyword pattern | Injected skill |
 |-----------------|----------------|
-| `tdd`, `test-driven`, `测试驱动` | test-driven-development |
-| `plan`, `规划`, `拆解` | writing-plans |
-| `subagent`, `并行`, `多 agent` | subagent-driven-development |
-| `review`, `评审`, `code review` | requesting-code-review |
-| `debug`, `调试`, `修复 bug` | systematic-debugging |
+| `tdd`, `test-driven` | test-driven-development |
+| `plan`, `decompose` | writing-plans |
+| `subagent`, `multi-agent` | subagent-driven-development |
+| `review`, `code review` | requesting-code-review |
+| `debug`, `fix bug` | systematic-debugging |
 | anything else | generic workflow reminder |
 
 This means a single `loop` step like:
@@ -537,10 +537,10 @@ CC Workflows integrates with Superpowers in two ways:
 2. **Manual combination** — use Superpowers keywords in your conversation prompts:
 
 ```
-💬 在 Claude Code 中：
-> 用 cc-workflows loop 实现用户注册功能，使用 TDD，最多 50 步
+💬 In Claude Code:
+> Run a 50-step loop to implement user registration using TDD
 
-> 用 cc-workflows loop 使用 subagent-driven-development 重构 auth 模块，最多 80 步
+> Run an 80-step loop to refactor the auth module using subagent-driven-development
 ```
 
 Install Superpowers as a Claude Code plugin:
@@ -561,8 +561,8 @@ Install Superpowers as a Claude Code plugin:
 3. **Combine with Superpowers** — if Superpowers is installed, Claude can trigger brainstorming for clarification, inject TDD constraints, or apply subagent-driven-development automatically
 
 ```
-💬 在 Claude Code 中：
-> /cc-workflows 重构 auth 模块，加上 OAuth2 支持
+💬 In Claude Code:
+> /cc-workflows Refactor the auth module to add OAuth2 support
 
 Claude will:
   → Auto-detect task type (implementation)
@@ -622,33 +622,33 @@ Claude:
 When a task **exceeds 12 tool-call rounds** or needs **20+ steps**, the main session's context will overflow. Switch to cc-workflows `loop`:
 
 ```
-💬 在 Claude Code 中：
-> /cc-workflows loop 用 TDD 重构 auth.py，分 7 步：
-> Step 1: 用 TDD 方式为 auth.py 写 OAuth2 的失败测试
-> Step 2: 实现最小代码让测试通过
-> Step 3: 重构，提取公共逻辑
-> Step 4: 用 TDD 为 token 刷新写失败测试
-> Step 5: 实现刷新逻辑
-> Step 6: 运行全量测试确认无回归
-> Step 7: 提交代码
-> 最多 50 步
+💬 In Claude Code:
+> /cc-workflows loop Refactor auth.py with TDD, 7 steps:
+> Step 1: Write failing OAuth2 tests for auth.py using TDD
+> Step 2: Implement minimal code to pass tests
+> Step 3: Refactor — extract shared logic
+> Step 4: Write failing token refresh tests using TDD
+> Step 5: Implement refresh logic
+> Step 6: Run full test suite — confirm no regressions
+> Step 7: Commit code
+> Max 50 steps
 ```
 
 **Why this works:**
 - `loop` auto-detects keywords (e.g., `TDD`, `test`) and injects Superpowers constraints
 - Each segment clears context via `--resume`, preventing overflow
-- Supports breakpoint resume — just say "继续" to pick up where it left off
+- Supports breakpoint resume — just say "continue" to pick up where it left off
 
 ### Practice 3: Parallel Exploration → cc-workflows `parallel` + Explore Agent
 
 When you need to **analyze multiple independent subsystems simultaneously**:
 
 ```
-💬 在 Claude Code 中：
-> /cc-workflows parallel 并行分析 3 个维度：
-> 维度 1：审查 auth.py 的安全性（SQL 注入、XSS、权限绕过）
-> 维度 2：分析 api.py 的性能瓶颈（N+1 查询、缺少缓存、慢查询）
-> 维度 3：检查 db.py 的数据完整性（约束缺失、竞态条件、迁移问题）
+💬 In Claude Code:
+> /cc-workflows parallel Analyze 3 dimensions:
+> Dimension 1: Audit auth.py security (SQL injection, XSS, privilege escalation)
+> Dimension 2: Profile api.py performance (N+1 queries, missing cache, slow queries)
+> Dimension 3: Check db.py data integrity (missing constraints, race conditions, migration issues)
 ```
 
 **When to use:**
@@ -665,10 +665,10 @@ When you need to **analyze multiple independent subsystems simultaneously**:
 **Implement, then adversarially verify** — mirroring Superpowers' `verification-before-completion` principle:
 
 ```
-💬 在 Claude Code 中：
-> /cc-workflows verify 实现一个 JWT 中间件，支持 token 验证、刷新、黑名单。
-> 验证标准：1. 必须有单元测试覆盖正常和异常路径 2. 必须验证 token 过期 3. 必须处理畸形 token 4. 必须遵循项目风格
-> 最多验证 3 轮
+💬 In Claude Code:
+> /cc-workflows verify Implement a JWT middleware with token validation, refresh, and blacklist.
+> Rubric: 1. Unit tests covering normal and error paths 2. Token expiry validation 3. Malformed token handling 4. Follow project style
+> Max 3 verification rounds
 ```
 
 **This is equivalent to Superpowers' spec review + code quality review, but executed through cc-workflows' isolated subprocess.**
@@ -678,12 +678,12 @@ When you need to **analyze multiple independent subsystems simultaneously**:
 **Competing approaches** (mirrors Superpowers brainstorming's "propose 2-3 approaches"):
 
 ```
-💬 在 Claude Code 中：
-> /cc-workflows tournament 让 3 个选手竞争"实现一个线程安全的 LRU 缓存"，
-> judge 按"线程安全正确、O(1) 读写、代码简洁、测试充分"评分
+💬 In Claude Code:
+> /cc-workflows tournament 3 contestants compete to "implement a thread-safe LRU cache",
+> judge on "correct thread safety, O(1) read/write, clean code, good tests"
 
-> /cc-workflows genfilter 为 REST API 设计 3 种错误处理方案，
-> 标准：统一格式、包含错误码、支持国际化，筛出最好的 1 个
+> /cc-workflows genfilter Design 3 error handling schemes for a REST API,
+> criteria: unified format, error codes, i18n support — return the best 1
 ```
 
 ### Decision Tree: Which Tool When?
