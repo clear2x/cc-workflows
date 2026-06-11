@@ -440,9 +440,9 @@ global (auto-injected):
 
 ### Progress Feedback During Execution
 
-CC Workflows **prioritizes Claude Code's native Workflow tool** for orchestration, so you see real-time progress in the progress tree. Only falls back to cc_workflows.py subprocess for tasks that exceed the Workflow tool's capacity.
+CC Workflows supports **two execution forms** for real-time progress feedback, both fully supported:
 
-#### Primary: Native Workflow Tool Orchestration
+#### Form 1: Native Workflow Tool Orchestration
 
 When you trigger a cc-workflows pattern, Claude uses the Workflow tool to orchestrate it — you see phases and agents update in real-time:
 
@@ -467,9 +467,9 @@ Mode mapping:
 | `tournament` | `parallel()` compete → `agent()` judge |
 | `classify` | `agent(classify)` → `agent(route)` |
 
-#### Fallback: cc_workflows.py + Progress Polling
+#### Form 2: cc_workflows.py + Progress Polling
 
-For tasks that **exceed the Workflow tool's capacity** (> 20 steps, need breakpoint resume, need Superpowers auto-injection, > 8 parallel tasks), Claude runs cc_workflows.py in background and polls the progress file:
+Use cc_workflows.py subprocess with background execution and progress file polling. **Best for:** long tasks (> 20 steps), breakpoint resume, Superpowers auto-injection, batch parallel (> 8 tasks).
 
 ```
 💬 > /cc-workflows loop 重构 auth.py，分 7 步，最多 50 步
